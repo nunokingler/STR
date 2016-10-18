@@ -8,6 +8,11 @@
 #include<stdlib.h>
 #include "interface.h"
 #include "ConsoleApplication1.h"
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+
+xSemaphoreHandle Semkit;
 
 
 bool getBitValue(uInt8 value, uInt8 n_bit)
@@ -23,7 +28,27 @@ void setBitValue(uInt8  &variable, int n_bit, bool new_value_bit)
 	uInt8  mask_off = ~mask_on;
 	if (new_value_bit)  variable |= mask_on;
 	else         variable &= mask_off;
-}/**
+}
+uInt8 read_port(int porto)
+{
+	uInt8 aa = 0;
+	xSemaphoreTake(Semkit, portMAX_DELAY);
+	aa = ReadDigitalU8(porto);
+	xSemaphoreGive(Semkit);
+	return(aa);
+}
+void write_port(int porto, uInt8 value)
+{
+	uInt8 aa = 0;
+	xSemaphoreTake(Semkit, portMAX_DELAY);
+	WriteDigitalU8(porto, value);
+	xSemaphoreGive(Semkit);
+}
+
+
+
+
+/**
  *	FUNCOES X
  *
  */
@@ -270,7 +295,7 @@ bool get_piece() {
 		goto_y(2);
 		goto_z_dn();
 		//Give Info Pakage is taken and in transit
-		return true;
+		return true;//teste
 	}
 	return false;
 }
@@ -287,13 +312,85 @@ bool isAtCell(int x,int z) {
 /********************************************************************************
 			MAIN
 */
+void vTaskCode_1(void * pvParameters)
+{
+	for (;; ) {
+		printf("\nHello from TASK_1");
+		// Although the kernel is in preemptive mode, 
+		// we should help switch to another
+		// task with e.g. vTaskDelay(0) 
+		vTaskDelay(0);
+	}
+}
+void vTaskCode_2(void * pvParameters)
+{
+	for (;; )
+	{
+		printf("\nHello from TASK_2. I will sleep longer...");
+		vTaskDelay(10);
+	}
+}
+void vTaskHorizontal(void * pvParameters)
+{
+	while (TRUE)
+	{
+		//go right
+		uInt8 aa = read_port(2);
+		write_port(2, (aa & (0xff - 0x40)) | 0x80);
+
+		// wait till last sensor
+		while ((read_port(0) & 0x01)) { vTaskDelay(0); }
+
+		// go left		
+		aa = read_port(2);
+		write_port(2, (aa & (0xff - 0x80)) | 0x40);
+
+		// wait till last sensor
+		while ((read_port(0) & 0x04)) { vTaskDelay(0); }
+	}
+}
+
+void vTaskVertical(void * pvParameters)
+{
+	while (TRUE)
+	{
+		//go up
+		uInt8 aa = read_port(2);
+		write_port(2, (aa & (0xff - 0x04)) | 0x08);
+
+		// wait till z=3		
+		while ((read_port(0) & 0x40)) { vTaskDelay(1); }
+
+		// go down		
+		aa = read_port(2);
+		write_port(2, (aa & (0xff - 0x08)) | 0x04);
+
+		// wait till z=1		
+		while ((read_port(1) & 0x08)) { vTaskDelay(1); }
+	}
+}
+
 
 
 
 void main(void) {
-	put_piece();
-	getchar();
-	get_piece();
+	create_DI_channel(0);
+	create_DI_channel(1);
+	create_DO_channel(2);
+	Semkit = xSemaphoreCreateCounting(1, 1);   //SEMAPHORE CREATION
+	xTaskCreate(vTaskHorizontal, "TaskHoriz", 100, NULL, 0, NULL);
+	xTaskCreate(vTaskVertical, "TaskVertcal", 100, NULL, 0, NULL);
+
+	vTaskStartScheduler();
+
+	WriteDigitalU8(2, 0);  // all bits of port 2 set to z => stop all motors
+	close_channels();
+
+	//	xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
+	//	xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
+	//	vTaskStartScheduler();
+	
+
 
 	/*
 	IsAtDown();

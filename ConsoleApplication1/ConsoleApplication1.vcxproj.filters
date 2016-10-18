@@ -42,4 +42,7 @@
   <ItemGroup>
     <None Include="ClassDiagram.cd" />
   </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\..\..\..\..\..\..\Str\freeRTOS\freeRTOS.lib" />
+  </ItemGroup>
 </Project>
