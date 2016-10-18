@@ -1,19 +1,42 @@
 // ConsoleApplication1.cpp : Defines the entry point for the console application.
 //
 
+
+extern "C" {
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+}
 #include "stdafx.h"
 #include "NIDAQmx.h"
-#include "stdafx.h"
 #include<conio.h>
 #include<stdlib.h>
 #include "interface.h"
 #include "ConsoleApplication1.h"
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
 
-xSemaphoreHandle Semkit;
+//structure
+typedef struct {
+	int x;
+	int z;
+} TPosition;
 
+//mailboxes
+xQueueHandle        mbx_x;  //for goto_x
+xQueueHandle        mbx_z;  //for goto_z
+xQueueHandle        mbx_xz;
+xQueueHandle        mbx_req;
+
+//semahores
+xSemaphoreHandle   semkit; //exclusive access to the DAQ/Kit
+xSemaphoreHandle   _CRITICAL_port_access_;
+xSemaphoreHandle sem_x_done;
+xSemaphoreHandle  sem_z_done;
+
+/*
+*				FUNTIONS START
+*
+*
+*/
 
 bool getBitValue(uInt8 value, uInt8 n_bit)
 // given a byte value, returns the value of bit n
@@ -32,17 +55,17 @@ void setBitValue(uInt8  &variable, int n_bit, bool new_value_bit)
 uInt8 safe_ReadDigitalU8(int porto)
 {
 	uInt8 aa = 0;
-	xSemaphoreTake(Semkit, portMAX_DELAY);
+	xSemaphoreTake(semkit, portMAX_DELAY);
 	aa = ReadDigitalU8(porto);
-	xSemaphoreGive(Semkit);
+	xSemaphoreGive(semkit);
 	return(aa);
 }
 void safe_WriteDigitalU8 (int porto, uInt8 value)
 {
 	uInt8 aa = 0;
-	xSemaphoreTake(Semkit, portMAX_DELAY);
+	xSemaphoreTake(semkit, portMAX_DELAY);
 	WriteDigitalU8(porto, value);
-	xSemaphoreGive(Semkit);
+	xSemaphoreGive(semkit);
 }
 
 
@@ -54,23 +77,29 @@ void safe_WriteDigitalU8 (int porto, uInt8 value)
  */
 void move_x_right()
 {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 6, 0);
 	setBitValue(vp2, 7, 1);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 void move_x_left(){
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 7, 0);
 	setBitValue(vp2, 6, 1);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 void stop_x()
 {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 7, 0);
 	setBitValue(vp2, 6, 0);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 bool is_moving_left()
 {
@@ -152,21 +181,27 @@ bool isAtz(int z) {
 }
 	
 void move_z_up() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 3, 1);
 	setBitValue(vp2, 2, 0);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }void move_z_down() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 3, 0);
 	setBitValue(vp2, 2, 1);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 void stop_z() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 3, 0);
 	setBitValue(vp2, 2, 0);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 
 
@@ -222,22 +257,28 @@ bool is_at_z_up()
 *
 */
 void move_y_inside() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 5, 1);
 	setBitValue(vp2, 4, 0);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 void move_y_outside() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 5, 0);
 	setBitValue(vp2, 4, 1);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 void stop_y(){
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 5, 0);
 	setBitValue(vp2, 4, 0);
 	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
 }
 int actual_y() {//3 for outside, 1 for inside
 	int vp0 = safe_ReadDigitalU8(0);
@@ -377,7 +418,7 @@ void main(void) {
 	create_DI_channel(0);
 	create_DI_channel(1);
 	create_DO_channel(2);
-	Semkit = xSemaphoreCreateCounting(1, 1);   //SEMAPHORE CREATION
+	semkit = xSemaphoreCreateCounting(1, 1);   //SEMAPHORE CREATION
 	xTaskCreate(vTaskHorizontal, "TaskHoriz", 100, NULL, 0, NULL);
 	xTaskCreate(vTaskVertical, "TaskVertcal", 100, NULL, 0, NULL);
 
