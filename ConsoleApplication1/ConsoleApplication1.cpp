@@ -481,8 +481,6 @@ void goto_z_task(void *)
 	{
 		int z;
 		xQueueReceive(mbx_z, &z, portMAX_DELAY);
-
-		printf("\nentra goto_z_task");
 		goto_z(z);
 		xSemaphoreGive(sem_z_done);
 	}
@@ -500,6 +498,7 @@ void goto_y_task(void *)
 void keyChecker(void *) {
 	bool left = false, right = false, up = false, down = false;
 	while (1) {
+		vTaskDelay(5);
 		if (GetKeyState(VK_LEFT)& -128 && actual_x() != 1) {
 			if (right) {
 				right = false;
@@ -579,32 +578,26 @@ void motor_works(void *) {
 			xSemaphoreGive(sem_z_done);
 		}
 		case 1:	if (xSemaphoreTake(sem_x_done, portMAX_DELAY)) {
-			printf("is gonna move\n");
 			move_x_right();
 			xSemaphoreGive(sem_x_done);
 		}break;
 		case -1:	if (xSemaphoreTake(sem_x_done, portMAX_DELAY)) {
-			printf("is gonna move");
 			move_x_left();
 			xSemaphoreGive(sem_x_done);
 		}break;
 		case 2:	if (xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
-			printf("is gonna move");
 			move_z_up();
 			xSemaphoreGive(sem_z_done);
 		}break;
 		case -2:	if (xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
-			printf("is gonna move");
 			move_z_down();
 			xSemaphoreGive(sem_z_done);
 		}break;
 		case 5:	if (xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
-			printf("stoping");
 			stop_z();
 			xSemaphoreGive(sem_z_done);
 		}break;
 		case 6:if (xSemaphoreTake(sem_x_done, portMAX_DELAY)) {
-			printf("stoping");
 			stop_x();
 			xSemaphoreGive(sem_x_done);
 		}break;
@@ -614,55 +607,11 @@ void motor_works(void *) {
 	}
 }
 
-void keyControler_x(void *) {
-	while (1) {
-
-		if (GetKeyState(VK_LEFT)& -128 && actual_x() != 1) {
-			xSemaphoreTake(sem_x_done,portMAX_DELAY);
-			move_x_left();
-			while (GetKeyState(VK_LEFT)& -128 && actual_x() != 1)
-				vTaskDelay(1);
-			stop_x();
-			xSemaphoreGive(sem_x_done);
-		}
-		if (GetKeyState(VK_RIGHT)& -128 && actual_x() != 3) {
-			xSemaphoreTake(sem_x_done, portMAX_DELAY);
-			move_x_right();
-			while (GetKeyState(VK_RIGHT)& -128 && actual_x() != 3) {
-				vTaskDelay(1);
-			}
-			stop_x();
-			xSemaphoreGive(sem_x_done);
-		}
-	}
-}
-void keyControler_z(void*){
-	while(1){
-		if (GetKeyState(VK_UP)& -128 && actual_zTop() != 3) {
-			xSemaphoreTake(sem_z_done, portMAX_DELAY);
-			move_z_up();
-			while (GetKeyState(VK_UP)& -128 && actual_zTop() != 3) {
-				vTaskDelay(1);
-			}
-			stop_z();
-			xSemaphoreGive(sem_x_done);
-		}
-		if (GetKeyState(VK_DOWN)& -128 && actual_z() != 1) {
-			xSemaphoreTake(sem_z_done, portMAX_DELAY);
-			move_z_down();
-			while (GetKeyState(VK_DOWN)& -128 && actual_z() != 1) {
-				vTaskDelay(1);
-			}
-			stop_z();
-			xSemaphoreGive(sem_z_done);
-		}
-		
-	}
-}
-
 void testes(void *) {
+	int i = 0;
 	while (1) {
-			printf("estas clicando%d\n\n\n", GetKeyState(VK_LEFT)& -128);
+		printf("%d\n", i++);
+		vTaskDelay(1);
 	}
 }
 
@@ -685,9 +634,9 @@ void main(void) {
 	mbx_z = xQueueCreate(10, sizeof(int));
 	mbx_xz = xQueueCreate(10, sizeof(TPosition));
 	//mbx_req = xQueueCreate(10, sizeof(TRequest));
-	//xTaskCreate(goto_x_task, "v_gotox_task", 100, NULL, 0, NULL);
-	//xTaskCreate(goto_z_task, "v_gotoz_task", 100, NULL, 0, NULL);
-	//xTaskCreate(task_storage_services, "task_storage_services", 100, NULL, 0, NULL);
+	xTaskCreate(goto_x_task, "v_gotox_task", 100, NULL, 0, NULL);
+	xTaskCreate(goto_z_task, "v_gotoz_task", 100, NULL, 0, NULL);
+	xTaskCreate(task_storage_services, "task_storage_services", 100, NULL, 0, NULL);
 	//xTaskCreate(testes, "t", 100, NULL, 0, NULL);
 	xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
 	xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
