@@ -15,24 +15,31 @@ extern "C" {
 #include "ConsoleApplication1.h"
 #include <iostream>
 
-#define KEY_UP 72
-#define KEY_DOWN 80
-#define KEY_LEFT 75
-#define KEY_RIGHT 77
+#define x_max 3
+#define z_max 3
 //structure
 typedef struct {
 	int x;
 	int z;
 } TPosition;
 
+typedef struct {
+	int time;
+	char * t;
+}TRequest;
+typedef struct {
+	TPosition pos;
+	TRequest req;
+	bool take_put;
+}Task;
 //mailboxes
 xQueueHandle        mbx_x;  //for goto_x
 xQueueHandle        mbx_z;  //for goto_z
 xQueueHandle        mbx_y;  //for goto_y
 xQueueHandle        mbx_xz;
 xQueueHandle        mbx_req;
-xQueueHandle  sem_x_mov;
-xQueueHandle  sem_z_mov;
+xQueueHandle		 sem_x_mov;
+xQueueHandle		sem_being_used;
 
 //semahores
 xSemaphoreHandle   semkit; //exclusive access to the DAQ/Kit
@@ -398,6 +405,26 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 		} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
 	}
 }
+void put_piece_task() {
+	if (actual_z() == -1 || actual_x() == -1 || actual_y() != 2) {
+		int i = 0;
+		xQueueSend(mbx_z, &i, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		i = 1;
+		xQueueSend(mbx_y, &i, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		i = -1;
+		xQueueSend(mbx_z, &i, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		i = 2;
+		xQueueSend(mbx_y, &i, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	}
+}
 /*
 *
 *						 Tasks
@@ -462,6 +489,9 @@ void task_storage_services(void *)
 			safe_WriteDigitalU8(2, 0); //stop all motores;
 			vTaskEndScheduler(); // terminates application
 		}
+		if (stricmp(cmd, "pp") == 0) {
+			put_piece_task();
+		}
 	}
 }
 
@@ -472,7 +502,7 @@ void goto_x_task(void *)
 		int x;
 		xQueueReceive(mbx_x, &x, portMAX_DELAY);
 		goto_x(x);
-		xSemaphoreGive(sem_x_done);
+		xSemaphoreGive(sem_being_used);
 	}
 }
 void goto_z_task(void *)
@@ -481,8 +511,13 @@ void goto_z_task(void *)
 	{
 		int z;
 		xQueueReceive(mbx_z, &z, portMAX_DELAY);
-		goto_z(z);
-		xSemaphoreGive(sem_z_done);
+		if (z == 0) {
+			move_z_up();
+		}
+		if (z == -1)
+			move_z_down();
+		else goto_z(z);
+		xSemaphoreGive(sem_being_used);
 	}
 }
 void goto_y_task(void *)
@@ -492,7 +527,7 @@ void goto_y_task(void *)
 		int y;
 		xQueueReceive(mbx_y, &y, portMAX_DELAY);
 		goto_z(y);
-		xSemaphoreGive(sem_y_done);
+		xSemaphoreGive(sem_being_used);
 	}
 }
 void keyChecker(void *) {
@@ -571,39 +606,59 @@ void motor_works(void *) {
 		int i = 0;
 		xQueueReceive(sem_x_mov, &i, portMAX_DELAY);
 		switch (i) {
-		case 0:	if (xSemaphoreTake(sem_x_done, portMAX_DELAY)&& xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
-			stop_x();
-			stop_z();
-			xSemaphoreGive(sem_x_done);
-			xSemaphoreGive(sem_z_done);
-		}
-		case 1:	if (xSemaphoreTake(sem_x_done, portMAX_DELAY)) {
+		case 1:	if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			move_x_right();
-			xSemaphoreGive(sem_x_done);
+			xSemaphoreGive(sem_being_used);
 		}break;
-		case -1:	if (xSemaphoreTake(sem_x_done, portMAX_DELAY)) {
+		case -1:	if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			move_x_left();
-			xSemaphoreGive(sem_x_done);
+			xSemaphoreGive(sem_being_used);
 		}break;
-		case 2:	if (xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
+		case 2:	if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			move_z_up();
-			xSemaphoreGive(sem_z_done);
+			xSemaphoreGive(sem_being_used);
 		}break;
-		case -2:	if (xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
+		case -2:	if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			move_z_down();
-			xSemaphoreGive(sem_z_done);
+			xSemaphoreGive(sem_being_used);
 		}break;
-		case 5:	if (xSemaphoreTake(sem_z_done, portMAX_DELAY)) {
+		case 5:	if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			stop_z();
-			xSemaphoreGive(sem_z_done);
+			xSemaphoreGive(sem_being_used);
 		}break;
-		case 6:if (xSemaphoreTake(sem_x_done, portMAX_DELAY)) {
+		case 6:if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			stop_x();
-			xSemaphoreGive(sem_x_done);
+			xSemaphoreGive(sem_being_used);
 		}break;
 		}
 				
 		
+	}
+}
+void manager(void *) {
+	bool cells[x_max][z_max];
+	TRequest cells_p[x_max][z_max],zero;
+	zero.time = -1;
+	zero.t = "";
+	//Cell cells[x_max][z_max];
+	for (int i = 0; i < x_max; i++) {
+		for (int j = 0; j <= z_max; j++) {
+			cells[i][j] = 0;
+			cells_p[i][j] = zero;
+		}
+	}
+	while (1) {
+		Task c;
+		xQueueReceive(mbx_req, &c, portMAX_DELAY);
+		if (cells[c.pos.x][c.pos.z])
+			printf("are you crazy? look at the cell!\n");
+		else {
+			goto_xz_task(c.pos.x, c.pos.z);
+			xSemaphoreTake(sem_x_done, portMAX_DELAY);
+			xSemaphoreTake(sem_z_done, portMAX_DELAY);
+			put_piece_task();
+		}
+
 	}
 }
 
@@ -624,22 +679,24 @@ void main(void) {
 	semkit = xSemaphoreCreateCounting(10, 1);   //SEMAPHORE CREATION
 	sem_x_done = xSemaphoreCreateCounting(10, 1); // synchronization semaphore
 	sem_z_done = xSemaphoreCreateCounting(10, 1);  // synchronization semaphore
+	sem_y_done = xSemaphoreCreateCounting(10, 1);
 	_CRITICAL_port_access_ = xSemaphoreCreateCounting(10, 1); // exclusive access/resource semaphore 
+	sem_being_used = xSemaphoreCreateCounting(10, 1);
 
 
 															  // maximum number of messages, size of each message
-	sem_z_mov = xQueueCreate(10, sizeof(int));
 	sem_x_mov = xQueueCreate(10, sizeof(int));
 	mbx_x = xQueueCreate(10, sizeof(int));
 	mbx_z = xQueueCreate(10, sizeof(int));
+	mbx_y = xQueueCreate(10, sizeof(int));
 	mbx_xz = xQueueCreate(10, sizeof(TPosition));
-	//mbx_req = xQueueCreate(10, sizeof(TRequest));
+	mbx_req = xQueueCreate(10, sizeof(Task));
 	xTaskCreate(goto_x_task, "v_gotox_task", 100, NULL, 0, NULL);
 	xTaskCreate(goto_z_task, "v_gotoz_task", 100, NULL, 0, NULL);
 	xTaskCreate(task_storage_services, "task_storage_services", 100, NULL, 0, NULL);
 	//xTaskCreate(testes, "t", 100, NULL, 0, NULL);
-	xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
-	xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
+	//xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
+	//xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
 	vTaskStartScheduler();
 	
 	/*
