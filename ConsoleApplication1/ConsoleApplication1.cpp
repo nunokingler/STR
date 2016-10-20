@@ -25,21 +25,34 @@ typedef struct {
 
 typedef struct {
 	int time;
-	char * t;
+	int id;
 }TRequest;
 typedef struct {
 	TPosition pos;
 	TRequest req;
-	bool take_put;
+	bool put_take;
 }Task;
+typedef struct {
+	int i;
+	bool wait;
+}mov;
+typedef struct {
+	TPosition pos;
+	bool result;
+}Result;
+
+bool cells[x_max][z_max];
+TRequest cells_p[x_max][z_max];
 //mailboxes
-xQueueHandle        mbx_x;  //for goto_x
+xQueueHandle        mbx_xx;  //for goto_x
 xQueueHandle        mbx_z;  //for goto_z
 xQueueHandle        mbx_y;  //for goto_y
 xQueueHandle        mbx_xz;
 xQueueHandle        mbx_req;
 xQueueHandle		 sem_x_mov;
 xQueueHandle		sem_being_used;
+xQueueHandle		mbx_pieces;
+xQueueHandle		mbx_pieces_return;
 
 //semahores
 xSemaphoreHandle   semkit; //exclusive access to the DAQ/Kit
@@ -47,6 +60,7 @@ xSemaphoreHandle   _CRITICAL_port_access_;
 xSemaphoreHandle  sem_x_done;
 xSemaphoreHandle  sem_z_done;
 xSemaphoreHandle  sem_y_done;
+//void goto_xz_task(int x, int z, bool _wait_done = false);
 
 /*
 *				FUNTIONS START
@@ -84,6 +98,48 @@ void safe_WriteDigitalU8 (int porto, uInt8 value)
 	xSemaphoreGive(semkit);
 }
 
+void Turn_on_light_1() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
+	uInt8 vp2 = safe_ReadDigitalU8(2);
+	setBitValue(vp2, 0, 1);
+	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_);
+}
+void Turn_on_light_2() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
+	uInt8 vp2 = safe_ReadDigitalU8(2);
+	setBitValue(vp2, 1, 1);
+	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_);
+}
+void insert_piece() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
+	uInt8 vp1 = safe_ReadDigitalU8(1);
+	setBitValue(vp1, 4, 1);
+	safe_WriteDigitalU8(2, vp1);
+	xSemaphoreGive(_CRITICAL_port_access_);
+}
+void Turn_off_light_1() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
+	uInt8 vp2 = safe_ReadDigitalU8(2);
+	setBitValue(vp2, 0, 0);
+	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_);
+}
+void Turn_off_light_2() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
+	uInt8 vp2 = safe_ReadDigitalU8(2);
+	setBitValue(vp2, 1, 0);
+	safe_WriteDigitalU8(2, vp2);
+	xSemaphoreGive(_CRITICAL_port_access_);
+}
+void remove_piece() {
+	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
+	uInt8 vp1 = safe_ReadDigitalU8(1);
+	setBitValue(vp1, 4, 0);
+	safe_WriteDigitalU8(2, vp1);
+	xSemaphoreGive(_CRITICAL_port_access_);
+}
 
 
 
@@ -98,7 +154,7 @@ void move_x_right()
 	setBitValue(vp2, 6, 0);
 	setBitValue(vp2, 7, 1);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 void move_x_left(){
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
@@ -106,7 +162,7 @@ void move_x_left(){
 	setBitValue(vp2, 7, 0);
 	setBitValue(vp2, 6, 1);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 void stop_x()
 {
@@ -115,7 +171,7 @@ void stop_x()
 	setBitValue(vp2, 7, 0);
 	setBitValue(vp2, 6, 0);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 bool is_moving_x_left()
 {
@@ -208,14 +264,14 @@ void move_z_up() {
 	setBitValue(vp2, 3, 1);
 	setBitValue(vp2, 2, 0);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }void move_z_down() {
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp2 = safe_ReadDigitalU8(2);
 	setBitValue(vp2, 3, 0);
 	setBitValue(vp2, 2, 1);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 void stop_z() {
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
@@ -223,7 +279,7 @@ void stop_z() {
 	setBitValue(vp2, 3, 0);
 	setBitValue(vp2, 2, 0);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 
 
@@ -298,7 +354,7 @@ void move_y_inside() {
 	setBitValue(vp2, 5, 1);
 	setBitValue(vp2, 4, 0);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 void move_y_outside() {
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
@@ -306,7 +362,7 @@ void move_y_outside() {
 	setBitValue(vp2, 5, 0);
 	setBitValue(vp2, 4, 1);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 void stop_y(){
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
@@ -314,7 +370,7 @@ void stop_y(){
 	setBitValue(vp2, 5, 0);
 	setBitValue(vp2, 4, 0);
 	safe_WriteDigitalU8(2, vp2);
-	xSemaphoreGive(_CRITICAL_port_access_, portMAX_DELAY);
+	xSemaphoreGive(_CRITICAL_port_access_);
 }
 int actual_y() {//3 for outside, 1 for inside
 	int vp0 = safe_ReadDigitalU8(0);
@@ -355,7 +411,7 @@ void goto_y(int y_dest) {
 */
 
 bool put_piece() {
-	if (IsAtDown && isMiddle()/*&& cage is free*/) {
+	if (IsAtDown() && isMiddle()/*&& cage is free*/) {
 		goto_z_up();
 		goto_y(1);
 		goto_z_dn();
@@ -366,7 +422,7 @@ bool put_piece() {
 	return false;
 }
 bool get_piece() {
-	if (IsAtDown && isMiddle()&& actual_x()!=-1/*&& cage is free*/) {
+	if (IsAtDown() && isMiddle()&& actual_x()!=-1/*&& cage is free*/) {
 		goto_y(1);
 		goto_z_up();
 		goto_y(2);
@@ -376,23 +432,24 @@ bool get_piece() {
 	}
 	return false;
 }
-void goto_xz(int x, int z) {
-	goto_x(x);
-	goto_z(z);
-}
+
 
 
 bool isAtCell(int x,int z) {
 	return actual_x() == x && actual_z() == z;
 }
+
 void goto_xz_task(int x, int z, bool _wait_done = false)
 {
-	TPosition pos;
-	pos.x = x;
-	pos.z = z;
-	//xQueueSend(mbx_xz, &pos, portMAX_DELAY);
-	xQueueSend(mbx_x, &pos.x, portMAX_DELAY);
-	xQueueSend(mbx_z, &pos.z, portMAX_DELAY);
+
+	mov pos;
+	pos.i = x;
+	pos.wait = false;
+	//xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
+	xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	xQueueSend(mbx_xx, &pos, portMAX_DELAY);
+	pos.i = z;
+	xQueueSend(mbx_z, &pos, portMAX_DELAY);
 	if (_wait_done) {
 		do { vTaskDelay(1); } while (actual_x() != x);
 		do { vTaskDelay(1); } while (actual_z() != z);
@@ -404,25 +461,81 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 			// wait while still running
 		} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
 	}
+	//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	xSemaphoreGive(sem_being_used);
+}void goto_xz_call(void *) {
+	TPosition pos;
+	while (1) {
+		xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
+		goto_xz_task(pos.x, pos.z, true);
+	}
 }
-void put_piece_task() {
-	if (actual_z() == -1 || actual_x() == -1 || actual_y() != 2) {
-		int i = 0;
-		xQueueSend(mbx_z, &i, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		i = 1;
-		xQueueSend(mbx_y, &i, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		i = -1;
-		xQueueSend(mbx_z, &i, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		i = 2;
-		xQueueSend(mbx_y, &i, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		xSemaphoreTake(sem_being_used, portMAX_DELAY);
+bool put_pieces_send() {
+	bool i = true;
+	xQueueSend(mbx_pieces, &i, portMAX_DELAY);
+	if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2)
+		return true;
+	return false;
+}
+bool take_piece_send() {
+	bool i = false;
+	xQueueSend(mbx_pieces, &i, portMAX_DELAY);
+	if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2)
+		return true;
+	return false;
+}
+void piece_task(void *) {
+
+	bool j = false;
+	while (1) {
+		xQueueReceive(mbx_pieces, &j, portMAX_DELAY);
+		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2) {//fazer para nao dar para fazer put piece e goxz
+			if (j) {
+				xSemaphoreTake(sem_being_used, portMAX_DELAY);
+				mov i;
+				i.i = 0;
+				i.wait = true;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				i.i = 1;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				i.i = -1;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+
+				i.i = 2;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				bool b = true;
+				xQueueSend(mbx_pieces_return, &b, portMAX_DELAY);
+				xSemaphoreGive(sem_being_used);
+			}
+			else {
+				xSemaphoreTake(sem_being_used, portMAX_DELAY);
+				mov i;
+				i.i = 1;
+				i.wait = true;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				i.i = 0;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				i.i = 2;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				i.i = -1;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				Result b;
+				b.result = true;
+				xQueueSend(mbx_pieces_return, &b, portMAX_DELAY);
+				xSemaphoreGive(sem_being_used);
+			}
+		}
+
+		bool b = false;
+		xQueueSend(mbx_pieces_return, &b, portMAX_DELAY);
 	}
 }
 /*
@@ -480,7 +593,7 @@ void task_storage_services(void *)
 			printf("\nX="); fgets(str_x,20,stdin); x = atoi(str_x);
 			printf("\nZ="); fgets(str_z,20,stdin); z = atoi(str_z);
 			if (x >= 1 && x <= 3 && z >= 1 && z <= 3)
-				goto_xz_task(x, z,true);  //try many goto_xz fast
+				goto_xz_task(x, z,false);  //try many goto_xz fast
 			else
 				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
 		}
@@ -490,7 +603,34 @@ void task_storage_services(void *)
 			vTaskEndScheduler(); // terminates application
 		}
 		if (stricmp(cmd, "pp") == 0) {
-			put_piece_task();
+			printf("\nInfo!Info!");
+			char str_x[20], str_z[20];
+			int x, z,time,id; // you can use scanf or one else you like
+			printf("\nX="); fgets(str_x, 20, stdin); x = atoi(str_x);
+			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);
+			if (x >= 1 && x <= 3 && z >= 1 && z <= 3) {
+				printf("\nMOAR INFO!!!!!\nTHE CLOCK IS TICKING:");
+				fgets(str_x, 20, stdin);  time= atoi(str_x);
+				printf("\nMOAR MOAR MOAR!!!!\nID nbr:");
+				fgets(str_x, 20, stdin);  id = atoi(str_x);
+				if (time < -1 || !time || id <= 0)
+					printf("\nWoah there soemthing went wrong you beter try again soon");
+				else {
+					Task c;
+					c.pos.x = x;
+					c.pos.z = z;
+					c.put_take = true;
+					c.req.id = id;
+					c.req.time = time;
+					xQueueSend(mbx_xz, &c.pos, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+					if (!put_pieces_send())
+						printf("\nWoah there you should probably check the coordinates again");
+					
+				}
+			}
+		}
+		if (stricmp(cmd, "tp") == 0) {
+			take_piece_send();
 		}
 	}
 }
@@ -499,35 +639,39 @@ void goto_x_task(void *)
 {
 	while (true)
 	{
-		int x;
-		xQueueReceive(mbx_x, &x, portMAX_DELAY);
-		goto_x(x);
-		xSemaphoreGive(sem_being_used);
+		mov x;
+		xQueueReceive(mbx_xx, &x, portMAX_DELAY);
+		goto_x(x.i);
+		if(x.wait)
+			xSemaphoreGive(sem_x_done);
 	}
 }
 void goto_z_task(void *)
 {
 	while (true)
 	{
-		int z;
+		mov z;
 		xQueueReceive(mbx_z, &z, portMAX_DELAY);
-		if (z == 0) {
-			move_z_up();
+		if (z.i == 0) {
+			goto_z_up();
 		}
-		if (z == -1)
-			move_z_down();
-		else goto_z(z);
-		xSemaphoreGive(sem_being_used);
+		else
+			if (z.i == -1)
+			goto_z_dn();
+			else goto_z(z.i);
+		if(z.wait)
+			xSemaphoreGive(sem_z_done);
 	}
 }
 void goto_y_task(void *)
 {
 	while (true)
-	{
-		int y;
+	{	
+		mov y;
 		xQueueReceive(mbx_y, &y, portMAX_DELAY);
-		goto_z(y);
-		xSemaphoreGive(sem_being_used);
+		goto_y(y.i);
+		if(y.wait)
+			xSemaphoreGive(sem_y_done);
 	}
 }
 void keyChecker(void *) {
@@ -635,12 +779,19 @@ void motor_works(void *) {
 		
 	}
 }
-void manager(void *) {
-	bool cells[x_max][z_max];
-	TRequest cells_p[x_max][z_max],zero;
+bool Expired() {
+	for (int i = 0; i < x_max; i++) {
+		for (int j = 0; j <= z_max; j++) {
+			if (cells_p[i][j].time == 0)
+				return true;
+		}
+	}
+	return false;
+}
+void manager(void *) {//still need to do clock to count time and take ticks from cells with itens
+	TRequest  zero;
 	zero.time = -1;
-	zero.t = "";
-	//Cell cells[x_max][z_max];
+	zero.id = 0;
 	for (int i = 0; i < x_max; i++) {
 		for (int j = 0; j <= z_max; j++) {
 			cells[i][j] = 0;
@@ -650,24 +801,80 @@ void manager(void *) {
 	while (1) {
 		Task c;
 		xQueueReceive(mbx_req, &c, portMAX_DELAY);
-		if (cells[c.pos.x][c.pos.z])
-			printf("are you crazy? look at the cell!\n");
+		if (c.pos.x > x_max || c.pos.z > z_max || c.pos.x < 0 || c.pos.z < 0)
+			printf("Are you craycray? its out of bounds!!\n");
 		else {
-			goto_xz_task(c.pos.x, c.pos.z);
-			xSemaphoreTake(sem_x_done, portMAX_DELAY);
-			xSemaphoreTake(sem_z_done, portMAX_DELAY);
-			put_piece_task();
-		}
+			if (cells[c.pos.x][c.pos.z] && c.put_take)
+				printf("are you crazy? There is nothing in there!!!!\n");
+			else {
+				if (c.pos.x == 0 || c.pos.z == 0) {
+					for (int i = 0; i < x_max; i++) {
+						for (int j = 0; j <= z_max; j++) {
+							if (cells[i][j] == 0) {
+								c.pos.x = i+1;
+								c.pos.z = j+1;
+								i = x_max;
+								j = z_max;
+							}
+						}
+						if (i == x_max - 1) {
+							printf("There is no space!!\n");
+							c.pos.x = -1;
+						}
+					}
+				}
+				if (c.pos.x != -1) {
+					printf("entra\n");
+					goto_xz_task(c.pos.x, c.pos.z,true);
+					printf("passa\n");
+					put_pieces_send();
+					cells[c.pos.x][c.pos.z] = true;
+					cells_p[c.pos.x][c.pos.z] = c.req;
+				}
 
+			}
+			if (!cells[c.pos.x][c.pos.z] && !c.put_take)
+				printf("are you crazy? There is somethig  there already");
+			else {
+				if (c.pos.x == 0 || c.pos.z == 0) {
+					printf("Are you craycray? its out of bounds!!\n");
+				}
+				else {
+					goto_xz_task(c.pos.x, c.pos.z);
+					take_piece_send();
+					cells[c.pos.x][c.pos.z] = false;
+					cells_p[c.pos.x][c.pos.z] = zero;
+					if (!Expired()) {
+						Turn_off_light_1();
+					}
+				}
+			}
+			
+		}
+	}
+
+}
+
+
+void tick_tack(void *) {
+	xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	xSemaphoreGive(sem_being_used);
+	while (1) {
+		for (int i = 0; i < x_max; i++) {
+			for (int j = 0; j <= z_max; j++) {
+				if (cells_p[i][j].id && cells[i][j]&& cells_p[i][j].time>0) {
+					cells_p[i][j].time--;
+				}
+				if (cells_p[i][j].time == 0)
+					Turn_on_light_1();
+			}
+		}
+		vTaskDelay(1000);
 	}
 }
 
+
 void testes(void *) {
-	int i = 0;
-	while (1) {
-		printf("%d\n", i++);
-		vTaskDelay(1);
-	}
 }
 
 
@@ -677,26 +884,35 @@ void testes(void *) {
 */
 void main(void) {
 	semkit = xSemaphoreCreateCounting(10, 1);   //SEMAPHORE CREATION
-	sem_x_done = xSemaphoreCreateCounting(10, 1); // synchronization semaphore
-	sem_z_done = xSemaphoreCreateCounting(10, 1);  // synchronization semaphore
-	sem_y_done = xSemaphoreCreateCounting(10, 1);
+	sem_x_done = xSemaphoreCreateCounting(10, 0); // synchronization semaphore
+	sem_z_done = xSemaphoreCreateCounting(10, 0);  // synchronization semaphore
+	sem_y_done = xSemaphoreCreateCounting(10, 0);
 	_CRITICAL_port_access_ = xSemaphoreCreateCounting(10, 1); // exclusive access/resource semaphore 
 	sem_being_used = xSemaphoreCreateCounting(10, 1);
 
 
 															  // maximum number of messages, size of each message
+	mbx_pieces = xQueueCreate(10, sizeof(bool));
 	sem_x_mov = xQueueCreate(10, sizeof(int));
-	mbx_x = xQueueCreate(10, sizeof(int));
-	mbx_z = xQueueCreate(10, sizeof(int));
-	mbx_y = xQueueCreate(10, sizeof(int));
+	mbx_xx = xQueueCreate(10, sizeof(mov));
+	mbx_z = xQueueCreate(10, sizeof(mov));
+	mbx_y = xQueueCreate(10, sizeof(mov));
 	mbx_xz = xQueueCreate(10, sizeof(TPosition));
 	mbx_req = xQueueCreate(10, sizeof(Task));
+	mbx_pieces_return = xQueueCreate(10, sizeof(Result));
 	xTaskCreate(goto_x_task, "v_gotox_task", 100, NULL, 0, NULL);
 	xTaskCreate(goto_z_task, "v_gotoz_task", 100, NULL, 0, NULL);
+	xTaskCreate(goto_y_task, "v_gotoz_task", 100, NULL, 0, NULL);
 	xTaskCreate(task_storage_services, "task_storage_services", 100, NULL, 0, NULL);
 	//xTaskCreate(testes, "t", 100, NULL, 0, NULL);
 	//xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
 	//xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
+	xTaskCreate(piece_task, "piece_task", 100, NULL, 0, NULL);
+	//xTaskCreate(manager, "manager", 100, NULL, 0, NULL);
+	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
+	xTaskCreate(goto_xz_call, "xz", 100, NULL, 0, NULL);
+
+
 	vTaskStartScheduler();
 	
 	/*
