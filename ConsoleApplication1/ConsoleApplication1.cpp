@@ -148,7 +148,7 @@ bool has_piece() {
 
 bool Expired() {
 	for (int i = 0; i < x_max; i++) {
-		for (int j = 0; j <= z_max; j++) {
+		for (int j = 0; j < z_max; j++) {
 			if (cells_p[i][j].time == 0)
 				return true;
 		}
@@ -297,7 +297,6 @@ void stop_z() {
 
 
 void goto_z(int z_dest) {
-	printf("\nentrou funçao z z=%d, actual = %d\n", z_dest,actual_z());
 	if (actual_z() != -1) {  // is it at valid position?
 		if (actual_z() < z_dest) {
 			move_z_up();
@@ -478,7 +477,6 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 	pos.i = x;
 	pos.wait = false;
 	//xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
-	printf("entrou x= %d z= %d", x, z);
 	xSemaphoreTake(sem_being_used, portMAX_DELAY);
 	goto_y(2);
 	xQueueSend(mbx_xx, &pos, portMAX_DELAY);
@@ -497,7 +495,6 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 
 	}
 	xSemaphoreGive(sem_being_used);
-	printf("\nsaiu gotoxz");
 }
 void goto_xz_call(void *) {
 	TPosition pos;
@@ -761,7 +758,7 @@ void task_storage_services(void *)
 		}
 		if (!stricmp(cmd, "re")) {
 			for (int i = 0; i < x_max; i++) {
-				for (int j = 0; j <= z_max; j++) {
+				for (int j = 0; j < z_max; j++) {
 					if (cells[i][j]) {
 						if (cells_p[i][j].time == 0) {
 							Task c;
@@ -874,7 +871,7 @@ void task_storage_services(void *)
 		if (!stricmp(cmd, "sp")) {
 			bool found = false;
 			for (int i = 0; i < x_max; i++) {
-				for (int j = 0; j <= z_max; j++) {
+				for (int j = 0; j < z_max; j++) {
 					if (cells[i][j]) {
 						printf("\nThere is some %s in cell (%d,%d) that ", cells_p[i][j].id, i+1, j+1);
 
@@ -907,7 +904,7 @@ void task_storage_services(void *)
 			printf("\nI have seen some %s on:\n", reciver);
 			bool found = false;
 			for (int i = 0; i < x_max; i++) {
-				for (int j = 0; j <= z_max; j++) {
+				for (int j = 0; j < z_max; j++) {
 					if (cells[i][j]) {
 						if (!stricmp(cells_p[i][j].id, reciver)) {
 							printf("cell (%d,%d) and ", i+1, j+1);
@@ -939,7 +936,7 @@ void task_storage_services(void *)
 				else {
 
 					for (int i = 0; i < x_max; i++) {
-						for (int j = 0; j <= z_max; j++) {
+						for (int j = 0; j < z_max; j++) {
 							if (cells[i][j] == 0) {
 								x_pos = i + 1;
 								z_pos = j + 1;
@@ -952,7 +949,7 @@ void task_storage_services(void *)
 						}
 					}
 					if (x_pos != -1) {
-						printf("\n\nfoi escolhido o espaço %d %d", x_pos, z_pos);
+						printf("\n\nfoi escolhido o espaço (%d,%d)\n\n", x_pos, z_pos);
 						if (!cells[x_pos - 1][z_pos - 1]) {
 							for (int i = 0; i < 20; i++) {
 								if (id[i] == 0) {
@@ -1176,13 +1173,13 @@ void motor_works(void *) {
 		
 	}
 }
-
+/*
 void manager(void *) {//still need to do clock to count time and take ticks from cells with itens
 	TRequest  zero;
 	zero.time = -1;
 	//zero.id = 0; IMPORTANTE
 	for (int i = 0; i < x_max; i++) {
-		for (int j = 0; j <= z_max; j++) {
+		for (int j = 0; j < z_max; j++) {
 			cells[i][j] = 0;
 			cells_p[i][j] = zero;
 		}
@@ -1198,7 +1195,7 @@ void manager(void *) {//still need to do clock to count time and take ticks from
 			else {
 				if (c.pos.x == 0 || c.pos.z == 0) {
 					for (int i = 0; i < x_max; i++) {
-						for (int j = 0; j <= z_max; j++) {
+						for (int j = 0; j < z_max; j++) {
 							if (cells[i][j] == 0) {
 								c.pos.x = i+1;
 								c.pos.z = j+1;
@@ -1244,11 +1241,11 @@ void manager(void *) {//still need to do clock to count time and take ticks from
 
 }
 
-
+*/
 void tick_tack(void *) {
 	while (1) {
 		for (int i = 0; i < x_max; i++) {
-			for (int j = 0; j <= z_max; j++) {
+			for (int j = 0; j < z_max; j++) {
 				if (cells_p[i][j].id && cells[i][j]&& cells_p[i][j].time>0) {
 					cells_p[i][j].time--;
 				}
