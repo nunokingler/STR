@@ -389,7 +389,7 @@ bool isAty(int y) {
 	return actual_y() == y;
 }
 void goto_y(int y_dest) {
-	//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	xSemaphoreTake(sem_being_used, portMAX_DELAY);
 	if (actual_y() != -1) {  // is it at valid position?
 		if (actual_y() < y_dest) {
 			move_y_outside();
@@ -403,7 +403,7 @@ void goto_y(int y_dest) {
 		}
 		stop_y();   // arrived.
 	}
-	//xSemaphoreGive(sem_being_used, portMAX_DELAY);
+	xSemaphoreGive(sem_being_used, portMAX_DELAY);
 }
 /*
 *
