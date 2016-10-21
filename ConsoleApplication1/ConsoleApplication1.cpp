@@ -117,7 +117,7 @@ void insert_piece() {
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp1 = safe_ReadDigitalU8(1);
 	setBitValue(vp1, 4, 1);
-	safe_WriteDigitalU8(2, vp1);
+	safe_WriteDigitalU8(1, vp1);
 	xSemaphoreGive(_CRITICAL_port_access_);
 }
 void Turn_off_light_1() {
@@ -138,7 +138,7 @@ void remove_piece() {
 	xSemaphoreTake(_CRITICAL_port_access_, portMAX_DELAY);
 	uInt8 vp1 = safe_ReadDigitalU8(1);
 	setBitValue(vp1, 4, 0);
-	safe_WriteDigitalU8(2, vp1);
+	safe_WriteDigitalU8(1, vp1);
 	xSemaphoreGive(_CRITICAL_port_access_);
 }
 bool has_piece() {
@@ -289,6 +289,7 @@ void stop_z() {
 
 
 void goto_z(int z_dest) {
+	printf("\nentrou funçao z z=%d, actual = %d\n", z_dest,actual_z());
 	if (actual_z() != -1) {  // is it at valid position?
 		if (actual_z() < z_dest) {
 			move_z_up();
@@ -935,7 +936,6 @@ void task_storage_services(void *)
 							TRequest * item = (TRequest *)malloc(sizeof(TRequest));
 							strcpy(item->id, id);
 							item->time = time;
-							printf("\n\n time is %d\n\n", time);
 							xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
 							cells[x_pos - 1][z_pos - 1] = 1;
 							cells_p[x_pos - 1][z_pos - 1] = *item;
@@ -973,9 +973,7 @@ void take_put_task_alwayson(void *) {
 				insert_piece();
 			}
 			goto_y_semaphore(2);
-			printf("\nantes gotoxztask x = %d z =%d",c.pos.x,c.pos.z);
 			goto_xz_task(c.pos.x, c.pos.z, true);
-			printf("\ndepois gotoxxtask");
 			piece_task_action(true);
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 		}
@@ -989,6 +987,7 @@ void take_put_task_alwayson(void *) {
 				piece_task_action(false);
 				goto_xz_task(1, 1, true);
 				goto_y_semaphore(3);
+				remove_piece();
 				goto_y_semaphore(2);
 			}
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
