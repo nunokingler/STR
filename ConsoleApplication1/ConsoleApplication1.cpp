@@ -141,6 +141,10 @@ void remove_piece() {
 	safe_WriteDigitalU8(2, vp1);
 	xSemaphoreGive(_CRITICAL_port_access_);
 }
+bool has_piece() {
+	uInt8 vp1 = safe_ReadDigitalU8(1);
+	return getBitValue(vp1, 4);
+}
 
 
 
@@ -406,7 +410,7 @@ void goto_y(int y_dest) {
 	}
 	//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 }void goto_y_semaphore(int y_dest) {
-	xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	xSemaphoreTake(sem_being_used, portMAX_DELAY); 
 	if (actual_y() != -1) {  // is it at valid position?
 		if (actual_y() < y_dest) {
 			move_y_outside();
@@ -420,7 +424,7 @@ void goto_y(int y_dest) {
 		}
 		stop_y();   // arrived.
 	}
-	xSemaphoreGive(sem_being_used, portMAX_DELAY);
+	xSemaphoreGive(sem_being_used,portMAX_DELAY);
 }
 /*
 *
@@ -465,25 +469,28 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 	pos.i = x;
 	pos.wait = false;
 	//xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
+	printf("entrou x= %d z= %d", x, z);
 	xSemaphoreTake(sem_being_used, portMAX_DELAY);
 	goto_y(2);
-		xQueueSend(mbx_xx, &pos, portMAX_DELAY);
-		pos.i = z;
-		xQueueSend(mbx_z, &pos, portMAX_DELAY);
-		if (_wait_done) {
-			do { vTaskDelay(1); } while (actual_x() != x);
-			do { vTaskDelay(1); } while (actual_z() != z);
+	xQueueSend(mbx_xx, &pos, portMAX_DELAY);
+	pos.i = z;
+	xQueueSend(mbx_z, &pos, portMAX_DELAY);
+	if (_wait_done) {
+		do { vTaskDelay(1); } while (actual_x() != x);
+		do { vTaskDelay(1); } while (actual_z() != z);
 
-			uInt8  p;
-			do {
-				vTaskDelay(1);
-				p = safe_ReadDigitalU8(2);
-				// wait while still running
-			} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
+		uInt8  p;
+		do {
+			vTaskDelay(1);
+			p = safe_ReadDigitalU8(2);
+			// wait while still running
+		} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
 
-		}
+	}
 	xSemaphoreGive(sem_being_used);
-}void goto_xz_call(void *) {
+	printf("\nsaiu gotoxz");
+}
+void goto_xz_call(void *) {
 	TPosition pos;
 	while (1) {
 		xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
@@ -608,18 +615,23 @@ void piece_task(void *) {
 */
 void show_menu()
 {
+	printf("\n ***********************Low Level***********************");
 	printf("\n gxz...... goto(x,z)");
 	printf("\n gy....... goto(y)");
+	printf("\n grp...... goto retrive point(1,1) outside");
 	printf("\n pp....... Put a part in a specific x, z position");
 	printf("\n rp....... Retrieve a part from a specific x, z position");
-	printf("\n ......... more options you like...");
+	printf("\n ip....... Inserts Piece in cage(needs to be at insert position)");
+	printf("\n ir....... Removes Piece in cage(needs to be at insert position)");
+	printf("\n ***********************HIGH LEVEL**********************");
 	printf("\n ppc...... Put product ref in the cell (reference, date, x, z)");
 	printf("\n ppfc..... Put product ref in a free cell (reference, date)");
 	printf("\n rpc...... Retrieve a product from cell(x, z)");
+	printf("\n rpc...... Retrieve a product from cell(x, z)");
+	printf("\n ***********************INFO LAYER**********************");
 	printf("\n pc....... Show info on the product stored in a cell(x, z)");
 	printf("\n sp....... Show info on all products at the warehouse");
 	printf("\n sc....... Show all the cells (x,z) that have a given product");
-	printf("\n ......... more options you like...");
 	printf("\n end...... Terminate application...");
 }
 
@@ -668,7 +680,7 @@ void task_storage_services(void *)
 			else
 				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
 		}
-		if (!stricmp(cmd, "gy")) {
+		if (!stricmp(cmd, "gy")) { //pode passar por cima de uma caixa se estiver na posição
 			char str_y[20];
 			int y = 0;
 			printf("\nY="); fgets(str_y, 20, stdin); y = atoi(str_y);
@@ -682,12 +694,65 @@ void task_storage_services(void *)
 			}
 
 		}
+		if (!stricmp(cmd, "grp")) {
+			TPosition t;
+			t.x = 1;
+			t.z = 1;
+			xQueueSend(mbx_xz, &t, portMAX_DELAY);//goto_xz_task(x, z, false);  //try many goto_xz fast
+			mov c;
+			c.i =3;
+			c.wait = true;
+			xQueueSend(mbx_y_carefull, &c, portMAX_DELAY);
+
+		}
+		if (!stricmp(cmd, "rp")) {
+			printf("\nInfo!Info!");
+			char str_x[20], str_z[20];
+			int x, z, time; // you can use scanf or one else you like
+			printf("\nX="); fgets(str_x, 20, stdin); x = atoi(str_x);
+			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);
+			Task c;
+			c.pos.x = x;
+			c.pos.z = z;
+			c.put_take = false;
+			printf("\nsends\n");
+			xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+			printf("\nsends\n");
+		}
+		if (!stricmp(cmd, "pp")) {
+			printf("\nInfo!Info!");
+			char str_x[20], str_z[20];
+			int x, z, time; // you can use scanf or one else you like
+			printf("\nX="); fgets(str_x, 20, stdin); x = atoi(str_x);
+			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);							
+			Task c;
+			c.pos.x = x;
+			c.pos.z = z;
+			c.put_take = true;
+			strcpy(c.req.id, "");
+			c.req.time = -1;
+			xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+		}
+		/*if (!stricmp(cmd, "ip")){
+			if (actual_x() != 1 || actual_z() != 1 || actual_y() != 3) {
+				insert_piece();
+			}
+			else
+				printf("\n\nYou need to be at the listed position, sorry i am doing what i can :(\n\n\n");
+		}
+		if (!stricmp(cmd, "rp")) {
+			if (actual_x() != 1 || actual_z() != 1 || actual_y() != 3) {
+				remove_piece();
+			}
+			else
+				printf("\n\nYou need to be at the listed position, sorry i am doing what i can :(\n\n\n");
+		}*/
 		if (stricmp(cmd, "end") == 0)
 		{
 			safe_WriteDigitalU8(2, 0); //stop all motores;
 			vTaskEndScheduler(); // terminates application
 		}
-		if (stricmp(cmd, "pp") == 0) {
+		if (stricmp(cmd, "ppc") == 0) {
 			printf("\nInfo!Info!");
 			char str_x[20], str_z[20], id[20];
 			int x, z, time; // you can use scanf or one else you like
@@ -701,10 +766,7 @@ void task_storage_services(void *)
 				if (time < -1 || !time)
 					printf("\nWoah, your clock is crayzy man!!!!\n\n\n");
 				else {
-					if (!cells[x - 1][z - 1])
-					{
-
-					//	if (put_pieces_check()) {
+					if (!cells[x - 1][z - 1]){
 							for (int i = 0; i < 20; i++) {
 								if (id[i] == 0) {
 									id[i - 1] = 0;
@@ -720,13 +782,9 @@ void task_storage_services(void *)
 							TRequest * item = (TRequest *)malloc(sizeof(TRequest));
 							strcpy(item->id, id);
 							item->time = time;
-							printf("\n\n time is %d\n\n", time);
 							xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
 							cells[x - 1][z - 1] = 1;
 							cells_p[x - 1][z - 1] = *item;
-					//	}
-					//	else
-					//		printf("\nMaybe there is something being done right now, well scedule if for later if the coordinates are correct\n\n\n");
 					}
 					else
 						printf("\nHum, there is somethin in the way :\\\n\n\n");
@@ -736,7 +794,7 @@ void task_storage_services(void *)
 			else
 				printf("\nWrong (x,z) coordinates, are you sleeping?... \n\n\n");
 		}
-		if (stricmp(cmd, "rp") == 0) {//take piece
+		if (stricmp(cmd, "rpc") == 0) {//take piece
 			printf("\nInfo!Info!");
 			char str_x[20], str_z[20];
 			int x, z, time, id; // you can use scanf or one else you like
@@ -750,9 +808,7 @@ void task_storage_services(void *)
 					c.put_take = false;
 					xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
 					cells[x - 1][z - 1] = 0;
-
 				}
-
 				else
 					printf("\nUgh, There is nothing there man :\\\n\n\n");
 			}
@@ -836,6 +892,62 @@ void task_storage_services(void *)
 				printf("Nowhere actualy :\\\n");
 			}
 		}
+		if (!stricmp(cmd, "ppfc")) {
+			printf("\nInfo!Info!");
+			char str_x[20],id[20];
+			int x_pos,z_pos ,time; // you can use scanf or one else you like
+				printf("\nTHE CLOCK IS TICKING:");
+				fgets(str_x, 20, stdin);  time = atoi(str_x);
+				printf("\nMOAR MOAR MOAR!!!!\nID nbr:");
+				fgets(id, 20, stdin);
+				if (time < -1 || !time)
+					printf("\nWoah, your clock is crayzy man!!!!\n\n\n");
+				else {
+
+					for (int i = 0; i < x_max; i++) {
+						for (int j = 0; j <= z_max; j++) {
+							if (cells[i][j] == 0) {
+								x_pos = i + 1;
+								z_pos = j + 1;
+								i = x_max;
+								j = z_max;
+							}
+						}
+						if (i == x_max - 1) {
+							x_pos = -1;
+						}
+					}
+					if (x_pos != -1) {
+						printf("\n\nfoi escolhido o espaço %d %d", x_pos, z_pos);
+						if (!cells[x_pos - 1][z_pos - 1]) {
+							for (int i = 0; i < 20; i++) {
+								if (id[i] == 0) {
+									id[i - 1] = 0;
+									break;
+								}
+							}
+							Task c;
+							c.pos.x = x_pos;
+							c.pos.z = z_pos;
+							c.put_take = true;
+							strcpy(c.req.id, id);
+							c.req.time = time;
+							TRequest * item = (TRequest *)malloc(sizeof(TRequest));
+							strcpy(item->id, id);
+							item->time = time;
+							printf("\n\n time is %d\n\n", time);
+							xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+							cells[x_pos - 1][z_pos - 1] = 1;
+							cells_p[x_pos - 1][z_pos - 1] = *item;
+						}
+					}
+
+					else
+						printf("\nHum, the warehouse is full :(\n\n\n");
+
+				}
+			
+		}
 	}
 
 	
@@ -851,25 +963,34 @@ void take_put_task_alwayson(void *) {
 	Task c;
 	while (1) {
 		xQueueReceive(mbx_req, &c, portMAX_DELAY);
+		if (c.put_take) {			
 
-		if (c.put_take) {
 			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+			if (!has_piece()) {
+				goto_y_semaphore(2);
+				goto_xz_task(1, 1, true);
+				goto_y_semaphore(3);
+				insert_piece();
+			}
 			goto_y_semaphore(2);
-			goto_xz_task(1, 1, true);
-			goto_y_semaphore(3);
-			goto_y_semaphore(2);
+			printf("\nantes gotoxztask x = %d z =%d",c.pos.x,c.pos.z);
 			goto_xz_task(c.pos.x, c.pos.z, true);
+			printf("\ndepois gotoxxtask");
 			piece_task_action(true);
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 		}
 		else {
 			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
-			goto_y_semaphore(2);
-			goto_xz_task(c.pos.x, c.pos.z, true);
-			piece_task_action(false);			
-			goto_xz_task(1, 1, true);
-			goto_y_semaphore(3);
-			goto_y_semaphore(2);
+			if (has_piece())
+				printf("\n\nIm sorry, could you please remove the pice i have on me thank you :)\n\n\n");
+			else {
+				goto_y_semaphore(2);
+				goto_xz_task(c.pos.x, c.pos.z, true);
+				piece_task_action(false);
+				goto_xz_task(1, 1, true);
+				goto_y_semaphore(3);
+				goto_y_semaphore(2);
+			}
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 		}
 	}
@@ -1152,7 +1273,6 @@ void main(void) {
 	//xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
 	xTaskCreate(take_put_task_alwayson, "takes", 100, NULL, 0, NULL);
 	xTaskCreate(piece_task, "piece_task", 100, NULL, 0, NULL);
-	//xTaskCreate(manager, "manager", 100, NULL, 0, NULL);
 	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
 	xTaskCreate(goto_xz_call, "xz", 100, NULL, 0, NULL);
 	xTaskCreate(goto_y_task_awlwaison, "y", 100, NULL, 0, NULL);
