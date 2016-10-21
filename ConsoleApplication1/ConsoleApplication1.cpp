@@ -297,7 +297,7 @@ void goto_z(int z_dest) {
 		}
 		stop_z();   // arrived.
 	}
-	else if (actual_zTop()) {
+	else if (actual_zTop()!=-1) {//antes nao estava
 		if (actual_zTop() < z_dest) {
 			move_z_up();
 		}
@@ -461,7 +461,6 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 			// wait while still running
 		} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
 	}
-	//xSemaphoreTake(sem_being_used, portMAX_DELAY);
 	xSemaphoreGive(sem_being_used);
 }void goto_xz_call(void *) {
 	TPosition pos;
@@ -477,12 +476,14 @@ bool put_pieces_send() {
 		return true;
 	return false;
 }
-bool take_piece_send() {
-	bool i = false;
-	xQueueSend(mbx_pieces, &i, portMAX_DELAY);
+bool put_pieces_check() {
 	if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2)
 		return true;
 	return false;
+}
+void take_piece_send() {
+	bool i = false;
+	xQueueSend(mbx_pieces, &i, portMAX_DELAY);
 }
 void piece_task(void *) {
 
@@ -503,9 +504,9 @@ void piece_task(void *) {
 				i.i = -1;
 				xQueueSend(mbx_z, &i, portMAX_DELAY);
 				xSemaphoreTake(sem_z_done, portMAX_DELAY);
-
 				i.i = 2;
 				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
 				xSemaphoreTake(sem_y_done, portMAX_DELAY);
 				bool b = true;
 				xQueueSend(mbx_pieces_return, &b, portMAX_DELAY);
@@ -523,7 +524,7 @@ void piece_task(void *) {
 				xSemaphoreTake(sem_z_done, portMAX_DELAY);
 				i.i = 2;
 				xQueueSend(mbx_y, &i, portMAX_DELAY);
-				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
 				i.i = -1;
 				xQueueSend(mbx_z, &i, portMAX_DELAY);
 				xSemaphoreTake(sem_z_done, portMAX_DELAY);
@@ -536,6 +537,47 @@ void piece_task(void *) {
 
 		bool b = false;
 		xQueueSend(mbx_pieces_return, &b, portMAX_DELAY);
+	}
+}void piece_task_action(bool j) {
+
+		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2) {//fazer para nao dar para fazer put piece e goxz
+			if (j) {
+				xSemaphoreTake(sem_being_used, portMAX_DELAY);
+				mov i;
+				i.i = 0;
+				i.wait = true;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				i.i = 1;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				i.i = -1;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				i.i = 2;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				xSemaphoreGive(sem_being_used);
+			}
+			else {
+				xSemaphoreTake(sem_being_used, portMAX_DELAY);
+				mov i;
+				i.i = 1;
+				i.wait = true;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				i.i = 0;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+				i.i = 2;
+				xQueueSend(mbx_y, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_y_done, portMAX_DELAY);
+				i.i = -1;
+				xQueueSend(mbx_z, &i, portMAX_DELAY);
+				xSemaphoreTake(sem_z_done, portMAX_DELAY);
+
+				xSemaphoreGive(sem_being_used);
+			}
 	}
 }
 /*
@@ -622,16 +664,29 @@ void task_storage_services(void *)
 					c.put_take = true;
 					c.req.id = id;
 					c.req.time = time;
-					xQueueSend(mbx_xz, &c.pos, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
-					if (!put_pieces_send())
+					xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+					if (!put_pieces_check())
 						printf("\nWoah there you should probably check the coordinates again");
 					
 				}
 			}
 		}
-		if (stricmp(cmd, "tp") == 0) {
-			take_piece_send();
+		if (stricmp(cmd, "rp") == 0) {
 		}
+	}
+}
+void take_put_task_alwayson(void *) {
+	Task c;
+	while (1) {
+		xQueueReceive(mbx_req, &c, portMAX_DELAY);
+
+		//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+		goto_xz_task(1, 1,true);
+		goto_y(3);
+		goto_y(2);
+		goto_xz_task(c.pos.x, c.pos.z, true);
+		piece_task_action(1);
+		//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 	}
 }
 
@@ -673,6 +728,10 @@ void goto_y_task(void *)
 		if(y.wait)
 			xSemaphoreGive(sem_y_done);
 	}
+}
+void goto_y_call(int destination) {//fazer
+	//xQueueSend(mbx_y)
+
 }
 void keyChecker(void *) {
 	bool left = false, right = false, up = false, down = false;
@@ -857,8 +916,6 @@ void manager(void *) {//still need to do clock to count time and take ticks from
 
 
 void tick_tack(void *) {
-	xSemaphoreTake(sem_being_used, portMAX_DELAY);
-	xSemaphoreGive(sem_being_used);
 	while (1) {
 		for (int i = 0; i < x_max; i++) {
 			for (int j = 0; j <= z_max; j++) {
@@ -907,6 +964,7 @@ void main(void) {
 	//xTaskCreate(testes, "t", 100, NULL, 0, NULL);
 	//xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
 	//xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
+	xTaskCreate(take_put_task_alwayson, "takes", 100, NULL, 0, NULL);
 	xTaskCreate(piece_task, "piece_task", 100, NULL, 0, NULL);
 	//xTaskCreate(manager, "manager", 100, NULL, 0, NULL);
 	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
