@@ -652,26 +652,55 @@ void task_storage_services(void *)
 			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);
 			if (x >= 1 && x <= 3 && z >= 1 && z <= 3) {
 				printf("\nMOAR INFO!!!!!\nTHE CLOCK IS TICKING:");
-				fgets(str_x, 20, stdin);  time= atoi(str_x);
+				fgets(str_x, 20, stdin);  time = atoi(str_x);
 				printf("\nMOAR MOAR MOAR!!!!\nID nbr:");
 				fgets(str_x, 20, stdin);  id = atoi(str_x);
-				if (time < -1 || !time || id <= 0)
-					printf("\nWoah there soemthing went wrong you beter try again soon");
+				if (time < -1 || !time)
+					printf("\nWoah, your clock is crayzy man!!!!\n\n\n");
 				else {
+					if (id <= 0)
+						printf("\nWrong id man, you disapointed me :(\n\n\n");
+					else {
+						Task c;
+						c.pos.x = x;
+						c.pos.z = z;
+						c.put_take = true;
+						c.req.id = id;
+						c.req.time = time;
+						xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+						cells[x - 1][z - 1] = 1;
+						cells_p[x - 1][z - 1] = c.req;
+					}
+					if (!put_pieces_check())
+						printf("\nWoah there you should probably check the coordinates again");
+
+				}
+			}
+			else
+				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
+		}
+		if (stricmp(cmd, "rp") == 0) {
+			printf("\nInfo!Info!");
+			char str_x[20], str_z[20];
+			int x, z, time, id; // you can use scanf or one else you like
+			printf("\nX="); fgets(str_x, 20, stdin); x = atoi(str_x);
+			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);
+			if (x >= 1 && x <= 3 && z >= 1 && z <= 3) {
+				if (!cells[x - 1][z - 1]) {
 					Task c;
 					c.pos.x = x;
 					c.pos.z = z;
-					c.put_take = true;
-					c.req.id = id;
-					c.req.time = time;
+					c.put_take = false;
 					xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
-					if (!put_pieces_check())
-						printf("\nWoah there you should probably check the coordinates again");
-					
+					cells[x - 1][z - 1] = 0;
+
 				}
+
+				else
+					printf("\nUgh, There is nothing there man :\\n\n\n");
 			}
-		}
-		if (stricmp(cmd, "rp") == 0) {
+			else
+				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
 		}
 	}
 }
@@ -680,13 +709,24 @@ void take_put_task_alwayson(void *) {
 	while (1) {
 		xQueueReceive(mbx_req, &c, portMAX_DELAY);
 
-		//xSemaphoreTake(sem_being_used, portMAX_DELAY);
-		goto_xz_task(1, 1,true);
-		goto_y(3);
-		goto_y(2);
-		goto_xz_task(c.pos.x, c.pos.z, true);
-		piece_task_action(1);
-		//xSemaphoreGive(sem_being_used, portMAX_DELAY);
+		if (c.put_take) {
+			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+			goto_xz_task(1, 1, true);
+			goto_y(3);
+			goto_y(2);
+			goto_xz_task(c.pos.x, c.pos.z, true);
+			piece_task_action(true);
+			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
+		}
+		else {
+			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+			goto_xz_task(c.pos.x, c.pos.z, true);
+			piece_task_action(false);			
+			goto_xz_task(1, 1, true);
+			goto_y(3);
+			goto_y(2);
+			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
+		}
 	}
 }
 
