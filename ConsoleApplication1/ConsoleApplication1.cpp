@@ -47,6 +47,7 @@ TRequest cells_p[x_max][z_max];
 xQueueHandle        mbx_xx;  //for goto_x
 xQueueHandle        mbx_z;  //for goto_z
 xQueueHandle        mbx_y;  //for goto_y
+xQueueHandle		mbx_y_carefull;
 xQueueHandle        mbx_xz;
 xQueueHandle        mbx_req;
 xQueueHandle		 sem_x_mov;
@@ -404,6 +405,22 @@ void goto_y(int y_dest) {
 		stop_y();   // arrived.
 	}
 	//xSemaphoreGive(sem_being_used, portMAX_DELAY);
+}void goto_y_semaphore(int y_dest) {
+	xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	if (actual_y() != -1) {  // is it at valid position?
+		if (actual_y() < y_dest) {
+			move_y_outside();
+		}
+		else if (actual_y() > y_dest) {
+			move_y_inside();
+		}
+		//while position not reached             
+		while (actual_y() != y_dest) {
+			_sleep(10);
+		}
+		stop_y();   // arrived.
+	}
+	xSemaphoreGive(sem_being_used, portMAX_DELAY);
 }
 /*
 *
@@ -449,20 +466,22 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 	pos.wait = false;
 	//xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
 	xSemaphoreTake(sem_being_used, portMAX_DELAY);
-	xQueueSend(mbx_xx, &pos, portMAX_DELAY);
-	pos.i = z;
-	xQueueSend(mbx_z, &pos, portMAX_DELAY);
-	if (_wait_done) {
-		do { vTaskDelay(1); } while (actual_x() != x);
-		do { vTaskDelay(1); } while (actual_z() != z);
+	goto_y(2);
+		xQueueSend(mbx_xx, &pos, portMAX_DELAY);
+		pos.i = z;
+		xQueueSend(mbx_z, &pos, portMAX_DELAY);
+		if (_wait_done) {
+			do { vTaskDelay(1); } while (actual_x() != x);
+			do { vTaskDelay(1); } while (actual_z() != z);
 
-		uInt8  p;
-		do {
-			vTaskDelay(1);
-			p = safe_ReadDigitalU8(2);
-			// wait while still running
-		} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
-	}
+			uInt8  p;
+			do {
+				vTaskDelay(1);
+				p = safe_ReadDigitalU8(2);
+				// wait while still running
+			} while (getBitValue(p, 2) || getBitValue(p, 3) || getBitValue(p, 7) || getBitValue(p, 6));
+
+		}
 	xSemaphoreGive(sem_being_used);
 }void goto_xz_call(void *) {
 	TPosition pos;
@@ -640,13 +659,27 @@ void task_storage_services(void *)
 			int x, z; // you can use scanf or one else you like
 			printf("\nX="); fgets(str_x, 20, stdin); x = atoi(str_x);
 			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);
-			if (x >= 1 && x <= 3 && z >= 1 && z <= 3)
-				goto_xz_task(x, z, false);  //try many goto_xz fast
+			if (x >= 1 && x <= 3 && z >= 1 && z <= 3){
+				TPosition t;
+				t.x = x;
+				t.z = z;
+				xQueueSend(mbx_xz, &t, portMAX_DELAY);//goto_xz_task(x, z, false);  //try many goto_xz fast
+			}
 			else
 				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
 		}
-		if (stricmp(cmd, "gy")) {
-
+		if (!stricmp(cmd, "gy")) {
+			char str_y[20];
+			int y = 0;
+			printf("\nY="); fgets(str_y, 20, stdin); y = atoi(str_y);
+			if (y != 1 && y != 2 && y != 3)
+				printf("\nVoce quer que isto va a lua nao?\n\n\n");
+			else {
+				mov c;
+				c.i = y;
+				c.wait = true;
+				xQueueSend(mbx_y_carefull, &c, portMAX_DELAY);
+			}
 
 		}
 		if (stricmp(cmd, "end") == 0)
@@ -807,6 +840,13 @@ void task_storage_services(void *)
 
 	
 }
+void goto_y_task_awlwaison(void*) {
+	mov c;
+	while (1) {
+		xQueueReceive(mbx_y_carefull,&c, portMAX_DELAY);
+		goto_y_semaphore(c.i);
+	}
+}
 void take_put_task_alwayson(void *) {
 	Task c;
 	while (1) {
@@ -814,20 +854,22 @@ void take_put_task_alwayson(void *) {
 
 		if (c.put_take) {
 			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+			goto_y_semaphore(2);
 			goto_xz_task(1, 1, true);
-			goto_y(3);
-			goto_y(2);
+			goto_y_semaphore(3);
+			goto_y_semaphore(2);
 			goto_xz_task(c.pos.x, c.pos.z, true);
 			piece_task_action(true);
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 		}
 		else {
 			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
+			goto_y_semaphore(2);
 			goto_xz_task(c.pos.x, c.pos.z, true);
 			piece_task_action(false);			
 			goto_xz_task(1, 1, true);
-			goto_y(3);
-			goto_y(2);
+			goto_y_semaphore(3);
+			goto_y_semaphore(2);
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 		}
 	}
@@ -873,7 +915,7 @@ void goto_y_task(void *)
 	}
 }
 void goto_y_call(int destination) {//fazer
-	//xQueueSend(mbx_y)
+	//xQueueSend(mbx_y);
 
 }
 void keyChecker(void *) {
@@ -1097,6 +1139,7 @@ void main(void) {
 	mbx_xx = xQueueCreate(10, sizeof(mov));
 	mbx_z = xQueueCreate(10, sizeof(mov));
 	mbx_y = xQueueCreate(10, sizeof(mov));
+	mbx_y_carefull = xQueueCreate(10, sizeof(mov));
 	mbx_xz = xQueueCreate(10, sizeof(TPosition));
 	mbx_req = xQueueCreate(10, sizeof(Task));
 	mbx_pieces_return = xQueueCreate(10, sizeof(Result));
@@ -1112,6 +1155,7 @@ void main(void) {
 	//xTaskCreate(manager, "manager", 100, NULL, 0, NULL);
 	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
 	xTaskCreate(goto_xz_call, "xz", 100, NULL, 0, NULL);
+	xTaskCreate(goto_y_task_awlwaison, "y", 100, NULL, 0, NULL);
 
 
 	vTaskStartScheduler();
