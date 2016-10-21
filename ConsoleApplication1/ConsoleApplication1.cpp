@@ -146,7 +146,15 @@ bool has_piece() {
 	return getBitValue(vp1, 4);
 }
 
-
+bool Expired() {
+	for (int i = 0; i < x_max; i++) {
+		for (int j = 0; j <= z_max; j++) {
+			if (cells_p[i][j].time == 0)
+				return true;
+		}
+	}
+	return false;
+}
 
 /**
  *	FUNCOES X
@@ -629,6 +637,7 @@ void show_menu()
 	printf("\n ppfc..... Put product ref in a free cell (reference, date)");
 	printf("\n rpc...... Retrieve a product from cell(x, z)");
 	printf("\n rpc...... Retrieve a product from cell(x, z)");
+	printf("\n re....... Retrieve a product from cell(x, z)");
 	printf("\n ***********************INFO LAYER**********************");
 	printf("\n pc....... Show info on the product stored in a cell(x, z)");
 	printf("\n sp....... Show info on all products at the warehouse");
@@ -717,9 +726,9 @@ void task_storage_services(void *)
 			c.pos.x = x;
 			c.pos.z = z;
 			c.put_take = false;
-			printf("\nsends\n");
-			xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
-			printf("\nsends\n");
+			xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo							
+			if (!Expired())
+				Turn_off_light_1();
 		}
 		if (!stricmp(cmd, "pp")) {
 			printf("\nInfo!Info!");
@@ -749,6 +758,26 @@ void task_storage_services(void *)
 			else {
 				remove_piece();
 			}
+		}
+		if (!stricmp(cmd, "re")) {
+			for (int i = 0; i < x_max; i++) {
+				for (int j = 0; j <= z_max; j++) {
+					if (cells[i][j]) {
+						if (cells_p[i][j].time == 0) {
+							Task c;
+							c.pos.x = i+1;
+							c.pos.z = j+1;
+							c.put_take = false;
+							xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+							cells[i][j] = 0;
+							if (!Expired())
+								Turn_off_light_1();
+						}
+					}
+				}
+			}
+
+
 		}
 		if (stricmp(cmd, "end") == 0)
 		{
@@ -810,7 +839,9 @@ void task_storage_services(void *)
 					c.pos.z = z;
 					c.put_take = false;
 					xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
-					cells[x - 1][z - 1] = 0;
+					cells[x - 1][z - 1] = 0;							
+					if (!Expired())
+						Turn_off_light_1();
 				}
 				else
 					printf("\nUgh, There is nothing there man :\\\n\n\n");
@@ -1145,15 +1176,7 @@ void motor_works(void *) {
 		
 	}
 }
-bool Expired() {
-	for (int i = 0; i < x_max; i++) {
-		for (int j = 0; j <= z_max; j++) {
-			if (cells_p[i][j].time == 0)
-				return true;
-		}
-	}
-	return false;
-}
+
 void manager(void *) {//still need to do clock to count time and take ticks from cells with itens
 	TRequest  zero;
 	zero.time = -1;
