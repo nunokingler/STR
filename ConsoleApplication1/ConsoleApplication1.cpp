@@ -594,6 +594,7 @@ void show_menu()
 	printf("\n ppc...... Put product ref in the cell (reference, date, x, z)");
 	printf("\n ppfc..... Put product ref in a free cell (reference, date)");
 	printf("\n rpc...... Retrieve a product from cell(x, z)");
+	printf("\n pc...... Show info on the product stored in a cell(x, z)");
 	printf("\n ......... more options you like...");
 	printf("\n end...... Terminate application...");
 }
@@ -660,7 +661,8 @@ void task_storage_services(void *)
 				else {
 					if (id <= 0)
 						printf("\nWrong id man, you disapointed me :(\n\n\n");
-					else {
+					if (!cells[x - 1][z - 1])
+					{
 						Task c;
 						c.pos.x = x;
 						c.pos.z = z;
@@ -671,13 +673,15 @@ void task_storage_services(void *)
 						cells[x - 1][z - 1] = 1;
 						cells_p[x - 1][z - 1] = c.req;
 					}
+					else
+						printf("\nHum, there is somethin in the way :\\n\n\n");
 					if (!put_pieces_check())
-						printf("\nWoah there you should probably check the coordinates again");
+						printf("\nWoah there you should probably check the coordinates again\n\n\n");
 
 				}
 			}
 			else
-				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
+				printf("\nWrong (x,z) coordinates, are you sleeping?... \n\n\n");
 		}
 		if (stricmp(cmd, "rp") == 0) {
 			printf("\nInfo!Info!");
@@ -686,7 +690,7 @@ void task_storage_services(void *)
 			printf("\nX="); fgets(str_x, 20, stdin); x = atoi(str_x);
 			printf("\nZ="); fgets(str_z, 20, stdin); z = atoi(str_z);
 			if (x >= 1 && x <= 3 && z >= 1 && z <= 3) {
-				if (!cells[x - 1][z - 1]) {
+				if (cells[x - 1][z - 1]) {
 					Task c;
 					c.pos.x = x;
 					c.pos.z = z;
@@ -697,10 +701,10 @@ void task_storage_services(void *)
 				}
 
 				else
-					printf("\nUgh, There is nothing there man :\\n\n\n");
+					printf("\nUgh, There is nothing there man :\\\n\n\n");
 			}
 			else
-				printf("\nWrong (x,z) coordinates, are you sleeping?... ");
+				printf("\nWrong (x,z) coordinates, are you sleeping?... \n\n\n");
 		}
 	}
 }
@@ -719,6 +723,7 @@ void take_put_task_alwayson(void *) {
 			//xSemaphoreGive(sem_being_used, portMAX_DELAY);
 		}
 		else {
+			printf("entrou");
 			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
 			goto_xz_task(c.pos.x, c.pos.z, true);
 			piece_task_action(false);			
