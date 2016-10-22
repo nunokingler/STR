@@ -492,9 +492,10 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 	pos.i = z;
 	xQueueSend(mbx_z, &pos, portMAX_DELAY);
 	if (_wait_done) {
-		do { vTaskDelay(1); } while (actual_x() != x && !getBitValue(ReadDigitalU8(1), 5));
-		do { vTaskDelay(1); } while (actual_z() != z && !getBitValue(ReadDigitalU8(1), 5));
-
+		printf("\nPre while");
+		do { vTaskDelay(1); } while ((actual_x() != x) && !getBitValue(ReadDigitalU8(1), 5));
+		do { vTaskDelay(1); } while ((actual_z() != z) && !getBitValue(ReadDigitalU8(1), 5));
+		printf("\nPos while");
 		uInt8  p;
 		do {
 			vTaskDelay(1);
@@ -1472,7 +1473,7 @@ void main(void) {
 	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
 	xTaskCreate(goto_xz_call, "xz", 100, NULL, 0, NULL);
 	xTaskCreate(goto_y_task_awlwaison, "y", 100, NULL, 0, NULL);
-	xTaskCreate(Fail_safe, "failsafe", 100, NULL, 0, NULL);
+	//xTaskCreate(Fail_safe, "failsafe", 100, NULL, 0, NULL);
 
 
 	vTaskStartScheduler();
