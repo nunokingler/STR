@@ -56,6 +56,7 @@ xQueueHandle		mbx_pieces;
 xQueueHandle		mbx_pieces_return;
 
 //semahores
+xSemaphoreHandle sem_idle;
 xSemaphoreHandle   semkit; //exclusive access to the DAQ/Kit
 xSemaphoreHandle   _CRITICAL_port_access_;
 xSemaphoreHandle  sem_x_done;
@@ -230,7 +231,7 @@ void goto_x(int x_dest) {
 			move_x_left();
 		}
 		//while position not reached             
-		while (actual_x() != x_dest) {
+		while (actual_x() != x_dest && !getBitValue(ReadDigitalU8(1), 5)) {
 			_sleep(10);
 		}
 		stop_x();   // arrived.
@@ -305,7 +306,7 @@ void goto_z(int z_dest) {
 			move_z_down();
 		}
 		//while position not reached             
-		while (actual_z() != z_dest) {
+		while (actual_z() != z_dest && !getBitValue(ReadDigitalU8(1), 5)) {
 			_sleep(10);
 		}
 		stop_z();   // arrived.
@@ -319,7 +320,7 @@ void goto_z(int z_dest) {
 		}
 		
 		//while position not reached             
-		while (actual_z() != z_dest) {
+		while (actual_z() != z_dest && !getBitValue(ReadDigitalU8(1), 5)) {
 			_sleep(10);
 		}
 		stop_z();   // arrived.
@@ -411,7 +412,7 @@ void goto_y(int y_dest) {
 			move_y_inside();
 		}
 		//while position not reached             
-		while (actual_y() != y_dest) {
+		while (actual_y() != y_dest && !getBitValue(ReadDigitalU8(1), 5)) {
 			_sleep(10);
 		}
 		stop_y();   // arrived.
@@ -427,7 +428,7 @@ void goto_y(int y_dest) {
 			move_y_inside();
 		}
 		//while position not reached             
-		while (actual_y() != y_dest) {
+		while (actual_y() != y_dest && !getBitValue(ReadDigitalU8(1), 5)) {
 			_sleep(10);
 		}
 		stop_y();   // arrived.
@@ -476,15 +477,23 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 	mov pos;
 	pos.i = x;
 	pos.wait = false;
-	//xQueueReceive(mbx_xz, &pos, portMAX_DELAY);
+	//xQueueReceive(mbx_xz, &pos, portMAX_DELAY);		
+	if (getBitValue(ReadDigitalU8(1), 5)) {
+
+		while (getBitValue(ReadDigitalU8(1), 5)) {
+			vTaskDelay(100);
+		}
+	vTaskDelay(100);
+	xSemaphoreTake(sem_being_used, portMAX_DELAY);
+	}
 	xSemaphoreTake(sem_being_used, portMAX_DELAY);
 	goto_y(2);
 	xQueueSend(mbx_xx, &pos, portMAX_DELAY);
 	pos.i = z;
 	xQueueSend(mbx_z, &pos, portMAX_DELAY);
 	if (_wait_done) {
-		do { vTaskDelay(1); } while (actual_x() != x);
-		do { vTaskDelay(1); } while (actual_z() != z);
+		do { vTaskDelay(1); } while (actual_x() != x && !getBitValue(ReadDigitalU8(1), 5));
+		do { vTaskDelay(1); } while (actual_z() != z && !getBitValue(ReadDigitalU8(1), 5));
 
 		uInt8  p;
 		do {
@@ -523,7 +532,15 @@ void piece_task(void *) {
 
 	bool j = false;
 	while (1) {
-		xQueueReceive(mbx_pieces, &j, portMAX_DELAY);
+		xQueueReceive(mbx_pieces, &j, portMAX_DELAY);		
+		if (getBitValue(ReadDigitalU8(1), 5)) {
+
+			while (getBitValue(ReadDigitalU8(1), 5)) {
+				vTaskDelay(100);
+			}
+			vTaskDelay(100);
+			xQueueReceive(mbx_pieces, &j, portMAX_DELAY);
+		}
 		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2) {//fazer para nao dar para fazer put piece e goxz
 			if (j) {
 				xSemaphoreTake(sem_being_used, portMAX_DELAY);
@@ -613,6 +630,112 @@ void piece_task(void *) {
 				xSemaphoreGive(sem_being_used);
 			}
 	}
+}void keyChecker() {
+	bool leave = false;
+	bool left = false, right = false, up = false, down = false,shift=false,control=false;
+	while (!leave) {
+		vTaskDelay(5);
+
+		if (GetKeyState(VK_LEFT)& -128 && actual_x() != 1) {
+			if (right) {
+				right = false;
+			}
+			if (!left) {
+				int i = -1;
+				xQueueSend(sem_x_mov, &i, 0);
+			}
+			left = true;
+		}
+		else
+		{
+			if (GetKeyState(VK_RIGHT)& -128 && actual_x() != 3) {
+				if (left) {
+					left = false;
+				}
+				if (!right) {
+					int i = 1;
+					xQueueSend(sem_x_mov, &i, 0);
+				}
+				right = true;
+			}
+			else {
+				if (right || left) {
+					int i = 6;
+					xQueueSend(sem_x_mov, &i, 0);
+				}
+				right = false;
+				left = false;
+
+			}
+		}
+		if (GetKeyState(VK_UP)& -128 && actual_zTop() != 3) {
+			if (down)
+				down = false;
+			if (!up) {
+				int i = 2;
+				xQueueSend(sem_x_mov, &i, 0);
+			}
+			up = true;
+
+		}
+		else {
+			if (GetKeyState(VK_DOWN)& -128 && actual_z() != 1) {
+				if (up)
+					up = false;
+				if (!down) {
+					int i = -2;
+					xQueueSend(sem_x_mov, &i, 0);
+				}
+				down = true;
+			}
+			else {
+				if (up || down) {
+					int i = 5;
+					xQueueSend(sem_x_mov, &i, 0);
+				}
+				up = false;
+				down = false;
+
+			}
+		}//y
+		if (GetKeyState(VK_LSHIFT)& -128 && actual_y() != 1) {
+			if (control) {
+				control = false;
+			}
+			if (!shift) {
+				int i = 7;
+				xQueueSend(sem_x_mov, &i, 0);
+			}
+			shift = true;
+		}
+		else
+		{
+			if (GetKeyState(VK_LCONTROL)& -128 && actual_y() != 3) {
+				if (shift) {
+					shift = false;
+				}
+				if (!control) {
+					int i = 8;
+					xQueueSend(sem_x_mov, &i, 0);
+				}
+				control = true;
+			}
+			else {
+				if (control || shift) {
+					int i = 9;
+					xQueueSend(sem_x_mov, &i, 0);
+				}
+				shift = false;
+				control = false;
+
+			}
+		}
+		if (GetKeyState(VK_SPACE)& -128)
+			leave = true;
+
+	}
+	printf("\NLEAVING\N");
+
 }
 /*
 *
@@ -624,6 +747,7 @@ void show_menu()
 	printf("\n ***********************Low Level***********************");
 	printf("\n gxz...... goto(x,z)");
 	printf("\n gy....... goto(y)");
+	printf("\n j........ Calibrate the machine with the joystick");
 	printf("\n grp...... goto retrive point(1,1) outside");
 	printf("\n pp....... Put a part in a specific x, z position");
 	printf("\n rp....... Retrieve a part from a specific x, z position");
@@ -656,6 +780,7 @@ void task_storage_services(void *)
 		// get selected option from keyboard
 		printf("\n\nEnter option=");
 		fgets(cmd, 20, stdin);
+		xSemaphoreGive(sem_idle);
 		for (int i = 0; i < 20; i++) {
 			if (cmd[i] == 0) {
 				cmd[i - 1] = 0;
@@ -978,6 +1103,9 @@ void task_storage_services(void *)
 				}
 			
 		}
+		if (!stricmp(cmd, "j")) {
+			keyChecker();
+		}
 	}
 
 	
@@ -993,6 +1121,14 @@ void take_put_task_alwayson(void *) {
 	Task c;
 	while (1) {
 		xQueueReceive(mbx_req, &c, portMAX_DELAY);
+		if (getBitValue(ReadDigitalU8(1), 5)) {
+
+			while (getBitValue(ReadDigitalU8(1), 5)) {
+				vTaskDelay(100);
+			}
+			vTaskDelay(100);
+			xQueueReceive(mbx_req, &c, portMAX_DELAY);
+		}
 		if (c.put_take) {			
 
 			//xSemaphoreTake(sem_being_used, portMAX_DELAY);
@@ -1068,81 +1204,21 @@ void goto_y_call(int destination) {//fazer
 	//xQueueSend(mbx_y);
 
 }
-void keyChecker(void *) {
-	bool left = false, right = false, up = false, down = false;
-	while (1) {
-		vTaskDelay(5);
-		if (GetKeyState(VK_LEFT)& -128 && actual_x() != 1) {
-			if (right) {
-				right = false;
-			}
-			if (!left) {
-				int i = -1;
-				xQueueSend(sem_x_mov, &i, 0);
-			}
-			left = true;
-		}
-		else
-		{
-			if (GetKeyState(VK_RIGHT)& -128 && actual_x() != 3) {
-				if (left) {
-					left = false;
-				}
-				if (!right) {
-					int i = 1;
-					xQueueSend(sem_x_mov, &i, 0);
-				}
-				right = true;
-			}
-			else {
-				if (right || left) {
-					int i = 6;
-					xQueueSend(sem_x_mov, &i, 0);
-				}
-				right = false;
-				left = false;
 
-			}
-		}
-		if (GetKeyState(VK_UP)& -128 && actual_zTop() != 3) {
-			if (down)
-				down = false;
-			if(!up){
-				int i = 2; 
-				xQueueSend(sem_x_mov, &i, 0);
-			}
-			up = true;
-
-		}
-		else {
-			if (GetKeyState(VK_DOWN)& -128 && actual_z() != 1) {
-				if (up)
-					up = false;
-				if (!down) {
-					int i = -2; 
-					xQueueSend(sem_x_mov, &i, 0);
-				}
-				down = true;
-			}
-			else {
-				if(up||down){
-					int i = 5;
-					xQueueSend(sem_x_mov, &i, 0);
-				}
-				up = false;
-				down = false;
-
-			}
-		}
-
-	}
-
-}
 
 void motor_works(void *) {
 	while (1) {
 		int i = 0;
 		xQueueReceive(sem_x_mov, &i, portMAX_DELAY);
+		if (getBitValue(ReadDigitalU8(1), 5)) {
+
+			while (getBitValue(ReadDigitalU8(1), 5)) {
+				vTaskDelay(100);
+			}
+			vTaskDelay(100);
+			xQueueReceive(sem_x_mov, &i, portMAX_DELAY);
+		}
+
 		switch (i) {
 		case 1:	if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
 			move_x_right();
@@ -1168,9 +1244,20 @@ void motor_works(void *) {
 			stop_x();
 			xSemaphoreGive(sem_being_used);
 		}break;
+		case 7:if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
+			move_y_inside();
+			xSemaphoreGive(sem_being_used);
+		}break;
+		case 8:if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
+			move_y_outside();
+			xSemaphoreGive(sem_being_used);
+		}break;
+		case 9:if (xSemaphoreTake(sem_being_used, portMAX_DELAY)) {
+			stop_y();
+			xSemaphoreGive(sem_being_used);
+		}break;
+
 		}
-				
-		
 	}
 }
 /*
@@ -1255,47 +1342,76 @@ void tick_tack(void *) {
 		}
 		vTaskDelay(1000);
 	}
-}/*
-void joystick() {
-	char t;
-	bool aux = true;
-	printf("\n\nCalibracao da Maquina a decorrer.\n\nUsar as teclas 'W','A','S' e 'D' para mover a posicao do braco\nUsar 'O' e 'P' para mover dentro e fora da celula.\n\n");
-	printf("\nPressionar 'Q' para sair.\n");
-	while (aux) {
-		t = 0;
-		if (kbhit()) // avoid being blocked waiting for input from a keyboard; kbhit() doesn't block
-			t = getch();
-		switch (t) {
-		case 'w': move_z_up(); break;
-		case 's': move_z_down(); break;
-		case 'a': move_x_left(); break;
-		case 'd': move_x_right(); break;
-		case 'o':
-			if (!is_at_y(3)) // isn't it already inside cell?
-				move_y_inside(); break;
-		case 'p':
-			if (!is_at_y(1)) // isn't it already outside cell?
-				move_y_outside(); break;
-		case ' ': stop_x(); stop_y(); stop_z(); break; // stop all motors
-		case 'q': aux = false; stop_x(); stop_y(); stop_z(); break;
+}
+void Fail_safe(void*) {
+	bool stoped = false();
+	while (1) {
+		vTaskDelay(100);
+		if (getBitValue(ReadDigitalU8(1), 5)) {//vou as outras para meter isto em cada ciclo de espera		 depois so tenho que ficar com o semaphoro sem_isbeing used, faço um ciclo ate o ter e como os whiles tem a condiçao contraria os outros nao vao ficar em nenhum ciclo while
+			printf("\n\nSTOPPED\n");
+			stop_x();
+			stop_y();
+			stop_z();
+			while (xSemaphoreTake(sem_being_used, 5) != pdTRUE) {//esta a dar stop 10 vezes
+				stop_x();
+				stop_y();
+				stop_z();
+			}
+			for (; !getBitValue(ReadDigitalU8(1), 5);) {
+				vTaskDelay(500);
+			}
+		}
+		
+		/*
+		if (getBitValue(ReadDigitalU8(1), 5)) {
+			stop_x();
+			stop_y();
+			stop_z();
+			sem_being_used = xSemaphoreCreateCounting(10, 1);
+			xSemaphoreTake(sem_being_used, portMAX_DELAY);
+			while (getBitValue(ReadDigitalU8(1), 5)) {
+				vTaskDelay(100);
+			}	
+			mbx_pieces = xQueueCreate(10, sizeof(bool));
+			sem_being_used = xSemaphoreCreateCounting(10, 1);
+			mbx_req = xQueueCreate(10, sizeof(Task));
+			mbx_pieces = xQueueCreate(10, sizeof(bool));
+		}*/
+
+	}
+
+}
+
+void idling(void *) {
+	while (1) {
+		if (xSemaphoreTake(sem_idle, 10000) == pdTRUE) {
 
 		}
+		else {
+			printf("\n\n\nSnoose ZzZzZzZzZz\n\n\n");
+			if (Expired()) {
+				for (int i = 0; i < x_max; i++) {
+					for (int j = 0; j < z_max; j++) {
+						if (cells[i][j]) {
+							if (cells_p[i][j].time == 0) {
+								Task c;
+								c.pos.x = i + 1;
+								c.pos.z = j + 1;
+								c.put_take = false;
+								xQueueSend(mbx_req, &c, portMAX_DELAY);//falta fazer task para so meter quadno chegar ao sitio certo
+								cells[i][j] = 0;
+								if (!Expired())
+									Turn_off_light_1();
+							}
+						}
+					}
+				}
 
-		if (is_at_x(1) && is_moving_left())
-			stop_x();
-		if (is_at_x(3) && is_moving_right())
-			stop_x();
-		if (is_at_y(1) && is_moving_outside())
-			stop_y();
-		if (is_at_y(3) && is_moving_inside())
-			stop_y();
-		if (is_at_z(1) && is_moving_down())
-			stop_z();
-		if (is_at_z(3) && is_moving_up())
-			stop_z();
+			}
+		}
 	}
-}*/
 
+}
 
 
 void teste(void *) {
@@ -1303,6 +1419,7 @@ void teste(void *) {
 	while (1) {
 		printf(" %d\n", i++);
 		vTaskDelay(100);
+
 	}
 }
 void testes(void *) {
@@ -1325,6 +1442,7 @@ void main(void) {
 	sem_y_done = xSemaphoreCreateCounting(10, 0);
 	_CRITICAL_port_access_ = xSemaphoreCreateCounting(10, 1); // exclusive access/resource semaphore 
 	sem_being_used = xSemaphoreCreateCounting(10, 1);
+	sem_idle = xSemaphoreCreateCounting(10, 0);
 
 
 															  // maximum number of messages, size of each message
@@ -1347,13 +1465,14 @@ void main(void) {
 	xTaskCreate(goto_z_task, "v_gotoz_task", 100, NULL, 0, NULL);
 	xTaskCreate(goto_y_task, "v_gotoz_task", 100, NULL, 0, NULL);
 	xTaskCreate(task_storage_services, "task_storage_services", 100, NULL, 0, NULL);
-	xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
+	//xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
 	xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
 	xTaskCreate(take_put_task_alwayson, "takes", 100, NULL, 0, NULL);
 	xTaskCreate(piece_task, "piece_task", 100, NULL, 0, NULL);
 	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
 	xTaskCreate(goto_xz_call, "xz", 100, NULL, 0, NULL);
 	xTaskCreate(goto_y_task_awlwaison, "y", 100, NULL, 0, NULL);
+	xTaskCreate(Fail_safe, "failsafe", 100, NULL, 0, NULL);
 
 
 	vTaskStartScheduler();
