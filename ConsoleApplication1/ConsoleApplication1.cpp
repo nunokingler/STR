@@ -1255,13 +1255,65 @@ void tick_tack(void *) {
 		}
 		vTaskDelay(1000);
 	}
+}/*
+void joystick() {
+	char t;
+	bool aux = true;
+	printf("\n\nCalibracao da Maquina a decorrer.\n\nUsar as teclas 'W','A','S' e 'D' para mover a posicao do braco\nUsar 'O' e 'P' para mover dentro e fora da celula.\n\n");
+	printf("\nPressionar 'Q' para sair.\n");
+	while (aux) {
+		t = 0;
+		if (kbhit()) // avoid being blocked waiting for input from a keyboard; kbhit() doesn't block
+			t = getch();
+		switch (t) {
+		case 'w': move_z_up(); break;
+		case 's': move_z_down(); break;
+		case 'a': move_x_left(); break;
+		case 'd': move_x_right(); break;
+		case 'o':
+			if (!is_at_y(3)) // isn't it already inside cell?
+				move_y_inside(); break;
+		case 'p':
+			if (!is_at_y(1)) // isn't it already outside cell?
+				move_y_outside(); break;
+		case ' ': stop_x(); stop_y(); stop_z(); break; // stop all motors
+		case 'q': aux = false; stop_x(); stop_y(); stop_z(); break;
+
+		}
+
+		if (is_at_x(1) && is_moving_left())
+			stop_x();
+		if (is_at_x(3) && is_moving_right())
+			stop_x();
+		if (is_at_y(1) && is_moving_outside())
+			stop_y();
+		if (is_at_y(3) && is_moving_inside())
+			stop_y();
+		if (is_at_z(1) && is_moving_down())
+			stop_z();
+		if (is_at_z(3) && is_moving_up())
+			stop_z();
+	}
+}*/
+
+
+
+void teste(void *) {
+	int i = 0;
+	while (1) {
+		printf(" %d\n", i++);
+		vTaskDelay(100);
+	}
 }
-
-
 void testes(void *) {
+	while (1) {
+		vTaskDelay(1000);
+		xTaskCreate(teste, "t", 100, NULL, 0, NULL);
+		vTaskStartScheduler(); printf("PUTAS!!!!!\n\n\n\n\n\n");
+		printf("PUTAS!!!!!\n\n\n\n\n\n");
+		_sleep(100000000);
+	}
 }
-
-
 
 /********************************************************************************
 			MAIN
@@ -1285,13 +1337,18 @@ void main(void) {
 	mbx_xz = xQueueCreate(10, sizeof(TPosition));
 	mbx_req = xQueueCreate(10, sizeof(Task));
 	mbx_pieces_return = xQueueCreate(10, sizeof(Result));
+
+
+	//xTaskCreate(testes, "t", 100, NULL, 0, NULL);
+	//xTaskCreate(teste, "t", 100, NULL, 0, NULL); 
+
+
 	xTaskCreate(goto_x_task, "v_gotox_task", 100, NULL, 0, NULL);
 	xTaskCreate(goto_z_task, "v_gotoz_task", 100, NULL, 0, NULL);
 	xTaskCreate(goto_y_task, "v_gotoz_task", 100, NULL, 0, NULL);
 	xTaskCreate(task_storage_services, "task_storage_services", 100, NULL, 0, NULL);
-	//xTaskCreate(testes, "t", 100, NULL, 0, NULL);
-	//xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
-	//xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
+	xTaskCreate(keyChecker, "key_Checker", 100, NULL, 0, NULL);
+	xTaskCreate(motor_works, "motors", 100, NULL, 0, NULL);
 	xTaskCreate(take_put_task_alwayson, "takes", 100, NULL, 0, NULL);
 	xTaskCreate(piece_task, "piece_task", 100, NULL, 0, NULL);
 	xTaskCreate(tick_tack, "tick", 100, NULL, 0, NULL);
