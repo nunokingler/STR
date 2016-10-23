@@ -492,10 +492,8 @@ void goto_xz_task(int x, int z, bool _wait_done = false)
 	pos.i = z;
 	xQueueSend(mbx_z, &pos, portMAX_DELAY);
 	if (_wait_done) {
-		printf("\nPre while");
 		do { vTaskDelay(1); } while ((actual_x() != x) && !getBitValue(ReadDigitalU8(1), 5));
 		do { vTaskDelay(1); } while ((actual_z() != z) && !getBitValue(ReadDigitalU8(1), 5));
-		printf("\nPos while");
 		uInt8  p;
 		do {
 			vTaskDelay(1);
@@ -542,7 +540,7 @@ void piece_task(void *) {
 			vTaskDelay(100);
 			xQueueReceive(mbx_pieces, &j, portMAX_DELAY);
 		}
-		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2) {//fazer para nao dar para fazer put piece e goxz
+		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2 && !getBitValue(ReadDigitalU8(1), 5)) {//fazer para nao dar para fazer put piece e goxz
 			if (j) {
 				xSemaphoreTake(sem_being_used, portMAX_DELAY);
 				mov i;
@@ -592,7 +590,7 @@ void piece_task(void *) {
 	}
 }void piece_task_action(bool j) {
 
-		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2) {//fazer para nao dar para fazer put piece e goxz
+		if (actual_z() != -1 && actual_x() != -1 && actual_y() == 2 && !getBitValue(ReadDigitalU8(1), 5)) {//fazer para nao dar para fazer put piece e goxz
 			if (j) {
 				xSemaphoreTake(sem_being_used, portMAX_DELAY);
 				mov i;
@@ -1179,11 +1177,11 @@ void goto_z_task(void *)
 	{
 		mov z;
 		xQueueReceive(mbx_z, &z, portMAX_DELAY);
-		if (z.i == 0) {
+		if (z.i == 0 && !getBitValue(ReadDigitalU8(1), 5)) {
 			goto_z_up();
 		}
 		else
-			if (z.i == -1)
+			if (z.i == -1 && !getBitValue(ReadDigitalU8(1), 5))
 			goto_z_dn();
 			else goto_z(z.i);
 		if(z.wait)
